@@ -16,16 +16,31 @@ Cloudflare Tunnel + Access.
 Re-run `./setup.sh` to pull upstream parser fixes.
 
 ## Run with Docker
-    docker compose up -d --build                                  # worker runs forever, restarts on boot
-    docker compose exec worker node cli.js add <tocUrl>           # any CLI command, same as below
-    docker compose exec worker node cli.js list
-    docker compose logs -f worker
+    cp .env.example .env && sed -i '' "s|^AUTH_SECRET=.*|AUTH_SECRET=$(openssl rand -base64 32)|" .env
+    docker compose up -d --build                                  # worker + web UI on http://localhost:3000
+    docker compose exec worker node cli.js user:create you@example.com "Your Name"   # prompts for the password
+    docker compose logs -f worker web
     docker compose build --no-cache && docker compose up -d       # pull WebToEpub parser fixes
 
-`./data` holds the SQLite DB and `./library` the EPUBs. Override with `NOVEL_DATA_DIR`,
-`NOVEL_LIBRARY_DIR` (point this at the Audiobookshelf library), and `PUID`/`PGID` (the user that
-owns that library, default 1000) in a `.env` next to `compose.yaml`. A newly added novel is
-fetched at the worker's next tick (≤ 1 min).
+The web UI never scrapes: add / check now / retry / interval / pause / delete are written to the DB and
+the worker picks them up within `NOVEL_TICK_MIN` (1 min). `./data` holds the SQLite DB (shared by both
+containers) and `./library` the EPUBs. Override with `NOVEL_DATA_DIR`, `NOVEL_LIBRARY_DIR` (point this
+at the Audiobookshelf library) and `PUID`/`PGID` (the user that owns that library, default 1000) in
+`.env`. Change the password with `cli.js user:password <email>` (logs out every session). The web port
+is bound to 127.0.0.1 only. Every CLI command below also works via `docker compose exec worker node cli.js …`.
+
+### Login: password locally, authentik on Tower
+Controlled by env (see `.env.example`). With no `AUTH_OIDC_*` set, only the password form is shown.
+On Tower set all three `AUTH_OIDC_*` to show "Sign in with authentik" (password stays as a fallback
+unless `AUTH_PASSWORD_LOGIN=false`). Partial OIDC config, or `AUTH_PASSWORD_LOGIN=false` without OIDC,
+stops the web container at startup. authentik setup:
+1. Applications → Providers → **OAuth2/OpenID Provider**: client type *Confidential*, redirect URI
+   `https://<novel host>/api/auth/callback/oidc`, signing key set (RS256), scopes `openid email profile`.
+   The `email` scope mapping must return `email_verified: true` for your user (the app refuses unverified emails).
+2. Applications → **Application** "novel" using that provider; slug `novel` → issuer
+   `https://auth.<domain>/application/o/novel/`. Bind it to your user/group only.
+3. First sign-in links your authentik identity to the account with the same email; afterwards only that
+   identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
 ## Novel manager (CLI)
     node cli.js add    https://freewebnovel.com/novel/<slug>   # fetch TOC, store novel + chapter list
@@ -97,7 +112,6 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 ## Next
 1. **Deploy to Tower:** same `compose.yaml` (verified locally), with `.env` pointing
    `NOVEL_LIBRARY_DIR` at the Audiobookshelf library and `PUID`/`PGID` at its owner.
-2. **Web UI:** add by URL with a preview (title, chapter count), library list with errors and
-   last check, "check now", pause/resume/delete. Behind Cloudflare Access.
+2. **Tower web deploy:** `web` behind Cloudflare Tunnel + Access, with authentik OIDC verified live.
 3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.

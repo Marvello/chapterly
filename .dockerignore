@@ -1,8 +1,12 @@
-node_modules
+**/node_modules
+**/.next
 vendor-WebToEpub
 data
 library
 .git
+.superpowers
 tasks
 test
+docs
+**/.env*
 .DS_Store

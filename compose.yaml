@@ -9,9 +9,34 @@ services:
     user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-UTC}
+      NOVEL_MAX_ATTEMPTS: ${NOVEL_MAX_ATTEMPTS:-5}
       # NOVEL_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
-      # NOVEL_MAX_ATTEMPTS: 5
       # NOVEL_RETRY_BASE_MIN: 60
     volumes:
       - ${NOVEL_DATA_DIR:-./data}:/data
       - ${NOVEL_LIBRARY_DIR:-./library}:/library
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: novel-web
+    container_name: novel-web
+    restart: unless-stopped
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      TZ: ${TZ:-UTC}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_PASSWORD_LOGIN: ${AUTH_PASSWORD_LOGIN:-true}
+      # OIDC (Tower only): set all three to enable "Sign in with authentik"
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
+      AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
+      AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
+      NOVEL_MAX_ATTEMPTS: ${NOVEL_MAX_ATTEMPTS:-5}
+    volumes:
+      - ${NOVEL_DATA_DIR:-./data}:/data
+    ports:
+      - "127.0.0.1:${NOVEL_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
