@@ -17,6 +17,7 @@ common-tech's `security.md`, and the worker stays the only process that scrapes.
 |---|---|
 | Who scrapes | **Only the worker.** The web app reads the DB and writes intents; it never fetches a site. |
 | Users | One account, created/changed from the CLI. No signup, no password reset. |
+| Login | **OIDC first (authentik on turing), email/password as fallback** (added 2026-09-28). Password login can be disabled with `AUTH_PASSWORD_LOGIN=false`. OIDC never creates accounts. |
 | v1 scope | Login · library · add by URL · novel page · check now · pause/resume · delete · retry failed chapters · per-novel check interval. **Not** in v1: EPUB download, in-browser reader. |
 | Stack | folionix web stack (`auth-direction.md`): Next.js 16, NextAuth v5 Credentials + JWT session, bcryptjs, Tailwind v4, lucide-react, TypeScript, vitest. |
 | Database | **SQLite stays** — documented exception to `postgres-client.md` (user decision 2026-09-28). The standard's non-Postgres parts are adopted: `db/migrations/NNN_name.sql`, ledger `schema_migrations(version, name, applied_at)`, migrations run on start by each process, all SQL in one module (`src/db.js`). |
@@ -55,7 +56,7 @@ The CLI keeps `update` (direct check) for debugging; the worker remains the norm
 - `users` — folionix shape plus login-safety columns:
   `id INTEGER PRIMARY KEY, name TEXT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
   failed_logins INTEGER NOT NULL DEFAULT 0, locked_until TEXT, session_version INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL`.
+  oidc_sub TEXT UNIQUE, created_at TEXT NOT NULL`.
 
 ### Migrations
 
@@ -70,8 +71,30 @@ The CLI keeps `update` (direct check) for debugging; the worker remains the norm
 
 Tailwind + lucide, folionix look (dark/light), **mobile-first**.
 
-**`/login`** — email + password. One error message for every failure: "Sign-in failed. Check your
-email and password." (unknown user, wrong password, locked). No signup / forgot-password links.
+**`/login`** — **"Sign in with authentik"** button first (shown when OIDC is configured), then the
+email + password form (hidden when `AUTH_PASSWORD_LOGIN=false`). One error message for every
+failure: "Sign-in failed." (unknown user, wrong password, locked, OIDC identity not allowed).
+No signup / forgot-password links.
+
+### OIDC (authentik)
+
+- NextAuth generic OIDC provider (`type: "oidc"`), configured by env: `AUTH_OIDC_ISSUER`
+  (e.g. `https://auth.<domain>/application/o/novel/`), `AUTH_OIDC_ID`, `AUTH_OIDC_SECRET`,
+  optional `AUTH_OIDC_NAME` (button label, default "authentik"). Unset issuer → no OIDC button.
+  Checks: PKCE + state (NextAuth defaults for OIDC). Scopes: `openid email profile`.
+- **Mapping to the single account** (`signIn` callback), in order:
+  1. a user with `oidc_sub = sub` exists → allowed;
+  2. else a user with `email = profile.email` exists, `profile.email_verified === true`, and that user
+     has no `oidc_sub` yet → store `oidc_sub = sub`, allowed;
+  3. anything else → rejected (logged), no account created.
+  Once bound, a changed email in authentik can't move the login to another account, and a second
+  authentik identity with the same email is rejected.
+- The resulting JWT carries the same `userId` + `session_version` as a password login, so session
+  invalidation (#3) covers both.
+- authentik setup (documented in README): OAuth2/OpenID provider + application "novel", redirect URI
+  `https://<novel host>/api/auth/callback/oidc`, signing key set (RS256), bound to my user/group only
+  (defense in depth — the app enforces the mapping regardless).
+- `cli.js user:unlink-oidc <email>` clears `oidc_sub` (e.g. after recreating the authentik user).
 
 **`/` Library**
 - Add box: paste URL → server validates (http/https, parses, ≤ 2048 chars, not already added) → novel
@@ -99,14 +122,14 @@ every 5 s; otherwise it's static.
 |---|---|---|
 | 1 | HSTS | `next.config` headers: `Strict-Transport-Security: max-age=31536000; includeSubDomains`, plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, CSP `frame-ancestors 'none'`. |
 | 3 | Reset sessions on password change | JWT carries `session_version`; the `jwt` callback re-reads the user on each request and rejects a mismatch. `cli.js user:password` bumps it. |
-| 5 | No enumeration | One error for all failures; unknown email still runs `bcrypt.compare` against a fixed dummy hash (equal timing). |
+| 5 | No enumeration | One error for all failures (incl. rejected OIDC identities); unknown email still runs `bcrypt.compare` against a fixed dummy hash (equal timing). |
 | 11 | Request size | `experimental.serverActions.bodySizeLimit = "64kb"`; URL ≤ 2048 chars. |
 | 13 | Input handling | URL parsed + http(s) only; interval from allowlist; ids parsed as positive integers. Parameterized queries only (`src/db.js`). React escaping; scraped text rendered as text; chapter HTML never rendered. |
 | 14 | CORS / CSRF | No CORS headers, no cross-origin API. Server actions (Next.js Origin check) for mutations; NextAuth CSRF on sign-in. |
 | 15 | Directory listing | Next.js doesn't list; data and library dirs are never served. |
-| 16 | Default/debug routes | No seeded user (`cli.js user:create`). Public routes: `/login`, `/api/auth/*`, `/api/health` (returns `ok` only). |
-| 17 | Lockout | 5 failures → lock with exponential backoff 1, 2, 4 … min, cap 60 min (`retry-backoff.md` pattern); success resets. Plus in-memory per-IP limit, 10 login attempts/min (single web process). |
-| 18 | Security events | One JSON line to stdout per: login success, login failure, lockout, stale session rejected, password changed/user created (CLI). Fields: event, email, ip, time. Never passwords/tokens. |
+| 16 | Default/debug routes | No seeded user (`cli.js user:create`); OIDC never auto-creates users. Public routes: `/login`, `/api/auth/*`, `/api/health` (returns `ok` only). |
+| 17 | Lockout | Password login only (OIDC lockout is authentik's job). 5 failures → lock with exponential backoff 1, 2, 4 … min, cap 60 min (`retry-backoff.md` pattern); success resets. Plus in-memory per-IP limit, 10 login attempts/min (single web process). |
+| 18 | Security events | One JSON line to stdout per: login success (method: password/oidc), login failure, OIDC identity rejected, OIDC sub bound, lockout, stale session rejected, password changed/user created (CLI). Fields: event, email, ip, time. Never passwords/tokens. |
 | 19 | Cookies | NextAuth `HttpOnly` + `SameSite=Lax`; `useSecureCookies: true` in production (behind Cloudflare Tunnel the app sees http). `AUTH_SECRET` required at start. |
 | 20 | DB permissions | **Partial**: SQLite has no roles. Only worker + web mount the data dir; the DB file is created by the container user (`PUID`) and is not world-writable. |
 | 4, 12 | Reset links / reset rate limit | N/A — no reset flow; password changed via CLI. |
@@ -122,16 +145,19 @@ Cloudflare Access sits in front on Tower as defense in depth; the app's own auth
 - Node tests (extend `test/pipeline.test.js` / add `test/db.test.js`): check request picked up and
   cleared; `check_finished_at` / checking state; add → worker fills metadata; ledger format;
   concurrent `openDb` migrations don't clash; user create/verify; lockout backoff (1, 2, 4 … cap 60);
-  `session_version` bump.
+  `session_version` bump; `oidc_sub` bind/lookup/unlink.
 - vitest in `web/`: authorize (same result for unknown/wrong/locked, dummy-hash path, lockout, IP
-  limit); URL + interval validation; status badge + sort; relative time.
+  limit); OIDC mapping (bound sub → ok; verified email + unbound → binds; unverified email → reject;
+  unknown email → reject; user already bound to another sub → reject); password login disabled by env; URL + interval validation; status badge + sort; relative time.
 - Manual end-to-end against local Docker in the browser (desktop + phone width, screenshots):
-  login + lockout, add novel → info → chapters, check now, retry, interval, pause, delete.
+  login via authentik (local authentik or turing's, redirect URI for localhost) + password fallback +
+  lockout, add novel → info → chapters, check now, retry, interval, pause, delete.
 - Final `security.md` pass against the code: Pass / Gap / N/A per item recorded in `tasks/todo.md`.
 
 **Deploy**
 - `compose.yaml` gains `web`: own image (`web/Dockerfile`, Next.js `output: "standalone"`, no
-  WebToEpub), mounts `./data`, port `127.0.0.1:3000:3000`, env `AUTH_SECRET`, `AUTH_URL`.
+  WebToEpub), mounts `./data`, port `127.0.0.1:3000:3000`, env `AUTH_SECRET`, `AUTH_URL`, and
+  optional `AUTH_OIDC_ISSUER` / `AUTH_OIDC_ID` / `AUTH_OIDC_SECRET` / `AUTH_OIDC_NAME`, `AUTH_PASSWORD_LOGIN`.
 - `worker`: `NOVEL_TICK_MIN` default 1; image adds `bcryptjs` for `cli.js user:create <email>` /
   `user:password <email>` (password read from a hidden prompt, never an argument).
 - First run: `docker compose up -d --build` → `docker compose exec worker node cli.js user:create <email>`.
