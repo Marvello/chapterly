@@ -14,7 +14,9 @@ const CHAPTER_COLS = "id, idx, url, title, fetched_at, error, attempts, retry_at
 function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data", "novel.db")) {
     if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
     const db = new DatabaseSync(file);
-    db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    // busy_timeout first: switching to WAL takes a lock, and a second process starting at the same
+    // moment (web + worker) must wait for it instead of failing with "database is locked".
+    db.exec("PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
     migrate(db);
     const one = (sql, ...p) => db.prepare(sql).get(...p);
     const all = (sql, ...p) => db.prepare(sql).all(...p);
