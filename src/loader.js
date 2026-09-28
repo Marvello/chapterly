@@ -9,9 +9,10 @@ const { browserFetch } = require("./browserFetch");
 
 const PLUGIN_DIR = path.join(__dirname, "..", "vendor-WebToEpub", "plugin");
 
-// UI-only files we replace with stubs instead of loading.
+// UI-only files we replace with stubs instead of loading. (DefaultParserUI.js is loaded: it also
+// defines DefaultParserSiteSettings, which DefaultParser needs; its UI hook is patched below.)
 const SKIP = new Set([
-    "js/main.js", "js/ChapterUrlsUI.js", "js/DefaultParserUI.js", "js/ProgressBar.js",
+    "js/main.js", "js/ChapterUrlsUI.js", "js/ProgressBar.js",
     "js/CoverImageUI.js", "js/ErrorLog.js", "js/Download.js", "js/Library.js",
 ]);
 
@@ -50,7 +51,6 @@ class ChapterUrlsUI {
     static get LOADED() { return "loaded"; }
     static get NONE() { return "none"; }
 }
-class DefaultParserUI { static setupDefaultParserUI() {} }
 class CoverImageUI { static clearUI() {} static showCoverImageUrlInput() {} static onCoverImageClicked() {} }
 class Library {}
 var main = { getUserPreferences: () => __hooks.userPreferences, onLoadFirstPage: () => {} };
@@ -134,6 +134,8 @@ function loadWebToEpub(opts = {}) {
     // jsdom can't decode images, so <img>.onload never fires and this would hang. Without
     // dimensions WebToEpub writes a plain <img> instead of an SVG wrapper, which is fine.
     run("ImageCollector.prototype.getImageDimensions = async () => null;", "patches.js");
+    // No config panel headless: DefaultParser would otherwise try to fill popup.html's UI.
+    run("DefaultParserUI.setupDefaultParserUI = () => {};", "patches.js");
     return { window: w, run, failed };
 }
 

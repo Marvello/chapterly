@@ -108,6 +108,12 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.ok(isDue({ ...due, last_checked_at: ago(1), check_requested_at: ago(0) }, t), "check now");
     assert.ok(!isDue({ ...due, status: "paused", last_checked_at: null, check_requested_at: ago(0) }, t));
 
+    // A URL that yields no chapters (unsupported page) is an error, not a silent "0/0" novel.
+    const empty = mockSite(0);
+    const bare = db.addNovel(`${BASE}?empty`); // distinct toc_url; served as the 0-chapter site
+    await checkNovel(db, createScraper({ fetch: url => empty.fetch(String(url).replace("?empty", "")) }), bare, quiet);
+    assert.match(db.getNovel(bare.id).last_error, /No chapters found/);
+
     // A novel deleted from the UI before/while the worker checks it: no throw, nothing rebuilt.
     const doomed = db.addNovel(`${BASE}?deleted`);
     db.deleteNovel(doomed.id);

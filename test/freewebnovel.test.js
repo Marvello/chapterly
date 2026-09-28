@@ -26,6 +26,21 @@ const { mockSite, BASE } = require("./mockSite");
     assert.ok(!ch.text.includes("junk"), "<sub> junk removed");
     assert.ok(!ch.html.includes("<script"), "scripts removed");
 
+    // Sites without a dedicated parser use WebToEpub's DefaultParser, whose settings class lives in
+    // DefaultParserUI.js; it must load headless (regression: "DefaultParserSiteSettings is not defined").
+    const generic = "https://unknown-site.example/story";
+    const genericPage = `<html><head><title>Generic Story</title></head><body>
+      <a href="${generic}/1">Chapter 1</a><a href="${generic}/2">Chapter 2</a></body></html>`;
+    const s2 = createScraper({ fetch: async url => {
+        const res = new Response(String(url) === generic ? genericPage : "not found",
+            { status: String(url) === generic ? 200 : 404, headers: { "content-type": "text/html" } });
+        Object.defineProperty(res, "url", { value: String(url) });
+        return res;
+    } });
+    const g = await s2.getNovel(generic);
+    assert.strictEqual(g.usingDefaultParser, true);
+    assert.strictEqual(g.title, "Generic Story");
+
     console.log("✓ freewebnovel harness test passed");
     console.log({ ...novel, _parser: undefined, chapters: novel.chapters.length });
     console.log(ch.html);

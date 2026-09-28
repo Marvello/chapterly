@@ -27,6 +27,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempt
     let error = null;
     try {
         const novel = await scraper.getNovel(novelRow.toc_url);
+        if (!novel.chapters.length) throw new Error(`No chapters found at ${novelRow.toc_url} (parser ${novel.parser})`);
         db.updateNovelMeta(id, novel);
         const { added } = diffChapters(db.chapters(id), novel.chapters);
         db.addChapters(id, added);
