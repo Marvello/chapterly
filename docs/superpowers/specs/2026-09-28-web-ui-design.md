@@ -141,7 +141,7 @@ every 5 s; otherwise it's static.
 | 16 | Default/debug routes | No seeded user (`cli.js user:create`); OIDC never auto-creates users. Public routes: `/login`, `/api/auth/*`, `/api/health` (returns `ok` only). |
 | 17 | Lockout | Password login only (OIDC lockout is authentik's job). 5 failures → lock with exponential backoff 1, 2, 4 … min, cap 60 min (`retry-backoff.md` pattern); success resets. Plus in-memory per-IP limit, 10 login attempts/min (single web process). |
 | 18 | Security events | One JSON line to stdout per: login success (method: password/oidc), login failure, OIDC identity rejected, OIDC sub bound, lockout, stale session rejected, password changed/user created (CLI). Fields: event, email, ip, time. Never passwords/tokens. |
-| 19 | Cookies | NextAuth `HttpOnly` + `SameSite=Lax`; `useSecureCookies: true` in production (behind Cloudflare Tunnel the app sees http). `AUTH_SECRET` required at start. |
+| 19 | Cookies | NextAuth `HttpOnly` + `SameSite=Lax`; `Secure` whenever `AUTH_URL` is https (always on Tower, where Cloudflare Tunnel hands the app plain http; local http://localhost keeps working). `AUTH_SECRET` required at start. |
 | 20 | DB permissions | **Partial**: SQLite has no roles. Only worker + web mount the data dir; the DB file is created by the container user (`PUID`) and is not world-writable. |
 | 4, 12 | Reset links / reset rate limit | N/A — no reset flow; password changed via CLI. |
 | 6 | Uploads | N/A — none. |
