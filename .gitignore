@@ -1,0 +1,5 @@
+node_modules/
+vendor-WebToEpub/
+data/
+library/
+.DS_Store

@@ -1,0 +1,25 @@
+{
+  "name": "novel-harness",
+  "version": "1.0.0",
+  "description": "Run WebToEpub site parsers headless in Node",
+  "main": "src/scraper.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "setup": "./setup.sh",
+    "test": "node test/diff.test.js && node test/freewebnovel.test.js && node --disable-warning=ExperimentalWarning test/pipeline.test.js",
+    "worker": "node --disable-warning=ExperimentalWarning cli.js worker"
+  },
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@zip.js/zip.js": "~2.7.72",
+    "dompurify": "^3.4.16",
+    "got-scraping": "^4.2.1",
+    "jsdom": "^24.1.3",
+    "tough-cookie": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
