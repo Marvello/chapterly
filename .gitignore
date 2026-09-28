@@ -3,3 +3,4 @@ vendor-WebToEpub/
 data/
 library/
 .DS_Store
+.superpowers/
