@@ -15,6 +15,18 @@ Cloudflare Tunnel + Access.
 
 Re-run `./setup.sh` to pull upstream parser fixes.
 
+## Run with Docker
+    docker compose up -d --build                                  # worker runs forever, restarts on boot
+    docker compose exec worker node cli.js add <tocUrl>           # any CLI command, same as below
+    docker compose exec worker node cli.js list
+    docker compose logs -f worker
+    docker compose build --no-cache && docker compose up -d       # pull WebToEpub parser fixes
+
+`./data` holds the SQLite DB and `./library` the EPUBs. Override with `NOVEL_DATA_DIR`,
+`NOVEL_LIBRARY_DIR` (point this at the Audiobookshelf library), and `PUID`/`PGID` (the user that
+owns that library, default 1000) in a `.env` next to `compose.yaml`. A newly added novel is
+fetched at the worker's next tick (≤ 5 min), or right away with `docker compose restart worker`.
+
 ## Novel manager (CLI)
     node cli.js add    https://freewebnovel.com/novel/<slug>   # fetch TOC, store novel + chapter list
     node cli.js list                                           # fetched/total chapters, last check, errors, EPUB path
@@ -83,8 +95,8 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   novel's original translator site over aggregators when WebToEpub supports it.
 
 ## Next
-1. **Deploy to Tower:** docker-compose (Node 24), SQLite on a volume, Audiobookshelf library mounted
-   read-write for the worker.
+1. **Deploy to Tower:** same `compose.yaml` (verified locally), with `.env` pointing
+   `NOVEL_LIBRARY_DIR` at the Audiobookshelf library and `PUID`/`PGID` at its owner.
 2. **Web UI:** add by URL with a preview (title, chapter count), library list with errors and
    last check, "check now", pause/resume/delete. Behind Cloudflare Access.
 3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or

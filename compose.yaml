@@ -1,0 +1,17 @@
+services:
+  worker:
+    build: .
+    image: novel-harness
+    container_name: novel-worker
+    restart: unless-stopped
+    init: true   # forwards SIGTERM so `docker compose stop` is instant (chapters are saved as they arrive)
+    # Must be able to write into the library; on Tower use Audiobookshelf's owner.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      TZ: ${TZ:-UTC}
+      # NOVEL_TICK_MIN: 5          # how often the worker looks for due novels
+      # NOVEL_MAX_ATTEMPTS: 5
+      # NOVEL_RETRY_BASE_MIN: 60
+    volumes:
+      - ${NOVEL_DATA_DIR:-./data}:/data
+      - ${NOVEL_LIBRARY_DIR:-./library}:/library

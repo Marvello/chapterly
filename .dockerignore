@@ -1,0 +1,8 @@
+node_modules
+vendor-WebToEpub
+data
+library
+.git
+tasks
+test
+.DS_Store
