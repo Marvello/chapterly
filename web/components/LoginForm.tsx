@@ -1,6 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BookOpen, KeyRound } from "lucide-react";
 
@@ -12,6 +13,7 @@ export default function LoginForm({ passwordLogin, oidcName, initialError }:
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
+  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,7 +25,8 @@ export default function LoginForm({ passwordLogin, oidcName, initialError }:
       setError(true);
       return;
     }
-    window.location.assign("/");
+    router.push("/");
+    router.refresh(); // re-render server components with the new session cookie
   }
 
   return (
