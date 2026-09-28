@@ -51,6 +51,21 @@ stops the web container at startup. authentik setup:
 3. First sign-in links your authentik identity to the account with the same email; afterwards only that
    identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
+## Deploy on Tower
+Tower can't pull this private repo, so the source is copied from a checkout and built there:
+
+    git archive HEAD | ssh marvello@debian-tower 'mkdir -p ~/chapterly && tar -x -C ~/chapterly'
+    ssh marvello@debian-tower 'cd ~/chapterly && docker compose up -d --build'
+
+(`tar -x` doesn't delete files removed from the repo; wipe everything except `~/chapterly/.env` if a
+change deletes files that matter.) Tower's `~/chapterly/.env` (mode 600, never committed) sets
+`CHAPTERLY_LIBRARY_DIR=/disk_pool/book` (Audiobookshelf's `/books`), `CHAPTERLY_DATA_DIR=/mnt/ssdpool/docker/chapterly`
+(owned by 1000), `CHAPTERLY_WEB_PORT=3030` (3000/3010 are taken by waha/Dockhand) and
+`AUTH_URL=http://localhost:3030`. No public hostname yet: open it through
+`ssh -N -L 3030:127.0.0.1:3030 marvello@debian-tower` → http://localhost:3030. To go public later, add
+the DockFlare labels (`dockflare.enable`, `dockflare.hostname`, `dockflare.service=http://chapterly-web:3000`),
+join the external `proxy` network, and set `AUTH_URL` to the https hostname.
+
 ## Novel manager (CLI)
     node cli.js add    https://freewebnovel.com/novel/<slug>   # fetch TOC, store novel + chapter list
     node cli.js list                                           # fetched/total chapters, last check, errors, EPUB path
