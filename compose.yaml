@@ -14,8 +14,14 @@ services:
     environment:
       TZ: ${TZ:-UTC}
       CHAPTERLY_MAX_ATTEMPTS: ${CHAPTERLY_MAX_ATTEMPTS:-5}
+      # Optional: ask Audiobookshelf to rescan after each EPUB update (all three, or none)
+      CHAPTERLY_ABS_URL: ${CHAPTERLY_ABS_URL:-}
+      CHAPTERLY_ABS_TOKEN: ${CHAPTERLY_ABS_TOKEN:-}
+      CHAPTERLY_ABS_LIBRARY: ${CHAPTERLY_ABS_LIBRARY:-}
       # CHAPTERLY_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
       # CHAPTERLY_RETRY_BASE_MIN: 60
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach services published on the host (e.g. ABS :13378)
     volumes:
       - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
       - ${CHAPTERLY_LIBRARY_DIR:-./library}:/library
@@ -43,7 +49,7 @@ services:
     volumes:
       - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
     ports:
-      - "127.0.0.1:${CHAPTERLY_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
+      - "${CHAPTERLY_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
 
 # SQLite (WAL) needs every process on one kernel. A named volume keeps the DB inside Docker's Linux
 # VM on Docker Desktop (Mac): no file-sharing layer between the two containers and no host access.

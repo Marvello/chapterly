@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { diffChapters } = require("./diff");
+const { createAbsNotifier, absConfigFromEnv } = require("./audiobookshelf");
 
 const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
@@ -21,7 +22,12 @@ const safeName = s => String(s || "Unknown").replace(/[/\\:*?"<>|\x00-\x1f]/g, "
  * One check of one novel: refresh the TOC, fetch pending chapters one by one, rebuild the EPUB.
  * Never throws; errors are recorded on the novel.
  */
-async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempts, retryBaseMin } = retryPolicy()) {
+/**
+ * opts: maxAttempts / retryBaseMin (default: env retry policy) and onEpubWritten(title), e.g. the
+ * Audiobookshelf rescan, called only when this check actually rewrote the EPUB.
+ */
+async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
+    const { maxAttempts, retryBaseMin, onEpubWritten } = { ...retryPolicy(), ...opts };
     const id = novelRow.id;
     db.markCheckStarted(id);
     let error = null;
@@ -70,6 +76,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempt
     if (db.epubStale(id)) {
         try {
             const file = await buildEpub(db, scraper, id);
+            await onEpubWritten?.(db.getNovel(id)?.title || novelRow.toc_url);
             log(`[${id}] EPUB written: ${file}`);
         } catch (e) {
             error = [error, `EPUB build failed: ${e.message}`].filter(Boolean).join("; ");
@@ -113,9 +120,9 @@ function isDue(n, at = Date.now()) {
 }
 
 /** Check every due novel, one at a time (so at most one request per site at once). */
-async function checkDue(db, scraper, log = console.log) {
+async function checkDue(db, scraper, log = console.log, opts = {}) {
     for (const n of db.listNovels().filter(n => isDue(n))) {
-        await checkNovel(db, scraper, n, log);
+        await checkNovel(db, scraper, n, log, opts);
     }
 }
 
@@ -127,9 +134,12 @@ function syncSupportedSites(db, scraper) {
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
 async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TICK_MIN || 1), log = console.log } = {}) {
     syncSupportedSites(db, scraper);
+    // Throws on a partial CHAPTERLY_ABS_* config, so a typo stops the worker instead of silently skipping rescans.
+    const onEpubWritten = createAbsNotifier(absConfigFromEnv(process.env), log) ?? undefined;
+    if (onEpubWritten) log("Audiobookshelf rescans enabled");
     log(`worker started: checking due novels every ${tickMin} min`);
     for (;;) {
-        await checkDue(db, scraper, log);
+        await checkDue(db, scraper, log, { onEpubWritten });
         await new Promise(r => setTimeout(r, tickMin * 60_000));
     }
 }

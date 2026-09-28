@@ -39,10 +39,12 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.match(epub.toString("latin1"), /OEBPS\/Images\/\S+?\.jpe?g/, "cover image embedded");
     assert.deepStrictEqual(fs.readdirSync(path.dirname(n.epub_path)), ["Test Story.epub"], "no temp file left behind");
 
-    // 2nd check, nothing new: no chapter fetches, EPUB not rebuilt.
+    // 2nd check, nothing new: no chapter fetches, EPUB not rebuilt, Audiobookshelf not asked to rescan.
     site.requests.length = 0;
     const builtAt = n.epub_built_at;
-    await checkNovel(db, s, db.getNovel(id), quiet);
+    const rescans = [];
+    await checkNovel(db, s, db.getNovel(id), quiet, { onEpubWritten: title => rescans.push(title) });
+    assert.deepStrictEqual(rescans, [], "no rescan when the EPUB didn't change");
     assert.deepStrictEqual(chapterRequests(site), []);
     assert.strictEqual(db.getNovel(id).epub_built_at, builtAt);
 
@@ -51,7 +53,8 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     const ch7 = `${BASE}/chapter-7`;
     site.broken.add(ch7);
     site.requests.length = 0;
-    await checkNovel(db, s, db.getNovel(id), quiet);
+    await checkNovel(db, s, db.getNovel(id), quiet, { onEpubWritten: title => rescans.push(title) });
+    assert.deepStrictEqual(rescans, ["Test Story"], "rescan requested once the EPUB was rebuilt");
     assert.deepStrictEqual(chapterRequests(site), [`${BASE}/chapter-6`, ch7]);
     n = db.getNovel(id);
     assert.match(n.last_error, /1 chapter\(s\) failed/);

@@ -93,6 +93,11 @@ the https hostname.
   tag on every check, unless you set it yourself (novel page or `cli.js series <id> <status>`), after
   which the site never overrides it. Completed + every chapter fetched → no more scheduled checks
   (only "Check now"); dropped (author or site abandoned it) → checked at most weekly.
+- **Audiobookshelf rescan (optional):** with `CHAPTERLY_ABS_URL`, `CHAPTERLY_ABS_TOKEN` (an ABS API key of
+  an **admin** user; ABS → Settings → API Keys) and `CHAPTERLY_ABS_LIBRARY` (library name or id, e.g.
+  `Ebooks`), the worker calls ABS's `POST /api/libraries/:id/scan` right after an EPUB changes, instead of
+  waiting for ABS's nightly scan. Best effort: failures are logged, the check still succeeds. A partial
+  config stops the worker at startup. On Tower: `CHAPTERLY_ABS_URL=http://host.docker.internal:13378`.
 - **EPUB:** packed by WebToEpub's own `EpubPacker` (EPUB 3 + toc.ncx, cover embedded), written to
   `CHAPTERLY_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
   path is fixed on first build, so Audiobookshelf keeps it as one item.

@@ -16,19 +16,21 @@
 //   node cli.js chapter <tocUrl> [n]             fetch chapter n (default 1) and print cleaned HTML
 //   node cli.js check   <tocUrl> <known.json>    list chapters not in known.json (a saved `info` output)
 // Env: CHAPTERLY_DB (default data/chapterly.db), CHAPTERLY_LIBRARY (default library/), CHAPTERLY_COOKIE, CHAPTERLY_UA,
-//      CHAPTERLY_MAX_ATTEMPTS (5), CHAPTERLY_RETRY_BASE_MIN (60: chapter retry backoff 1h, 2h, 4h, 8h)
+//      CHAPTERLY_MAX_ATTEMPTS (5), CHAPTERLY_RETRY_BASE_MIN (60: chapter retry backoff 1h, 2h, 4h, 8h),
+//      CHAPTERLY_ABS_URL / _TOKEN / _LIBRARY (ask Audiobookshelf to rescan after each EPUB update)
 "use strict";
 const fs = require("fs");
 const { createScraper } = require("./src/scraper");
 const { diffChapters } = require("./src/diff");
 const { openDb } = require("../shared/db");
 const worker = require("./src/worker");
+const { createAbsNotifier, absConfigFromEnv } = require("./src/audiobookshelf");
 const bcrypt = require("bcryptjs");
 const { logSecurity } = require("./src/securityLog");
 
 const [cmd, arg1, arg2] = process.argv.slice(2);
 const strip = n => ({ ...n, _parser: undefined });
-const usage = () => fs.readFileSync(__filename, "utf8").split("\n").slice(1, 19).join("\n");
+const usage = () => fs.readFileSync(__filename, "utf8").split("\n").slice(1, 20).join("\n");
 
 function scraper() {
     const s = createScraper({
@@ -111,12 +113,15 @@ function userByEmail(db, email) {
     case "update": {
         const db = openDb(), s = scraper();
         const targets = arg1 ? [novelById(db, arg1)] : db.listNovels().filter(n => n.status === "active");
-        for (const n of targets) await worker.checkNovel(db, s, n);
+        const onEpubWritten = createAbsNotifier(absConfigFromEnv(process.env)) ?? undefined;
+        for (const n of targets) await worker.checkNovel(db, s, n, console.log, { onEpubWritten });
         break;
     }
     case "build": {
         const db = openDb();
-        console.log(await worker.buildEpub(db, scraper(), novelById(db, arg1).id));
+        const n = novelById(db, arg1);
+        console.log(await worker.buildEpub(db, scraper(), n.id));
+        await createAbsNotifier(absConfigFromEnv(process.env))?.(n.title || n.toc_url);
         break;
     }
     case "pause":
