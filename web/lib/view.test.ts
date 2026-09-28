@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { novelStatus, relativeTime, sortLibrary } from "./view";
+import { newSince, novelStatus, relativeTime, sortLibrary } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -40,4 +40,8 @@ it("relativeTime", () => {
   expect(relativeTime(ago(3 * 3_600_000), now)).toBe("3h ago");
   expect(relativeTime(ago(2 * 86_400_000), now)).toBe("2d ago");
   expect(relativeTime(new Date(now + 90 * 60_000).toISOString(), now)).toBe("in 1h");
+});
+
+it("newSince is 24 h before now", () => {
+  expect(newSince(Date.parse("2026-01-02T00:00:00Z"))).toBe("2026-01-01T00:00:00.000Z");
 });

@@ -33,3 +33,6 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
   const v = Math.floor(n);
   return diff >= 0 ? `${v}${unit} ago` : `in ${v}${unit}`;
 }
+
+/** Chapters fetched at/after this time count as "+N new" in the library (last 24 h). */
+export const newSince = (now = Date.now()) => new Date(now - 86_400_000).toISOString();
