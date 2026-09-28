@@ -97,6 +97,17 @@ const fresh = name => path.join(tmp, name);
     assert.throws(() => w.createUser({ email: "me@example.com", name: null, passwordHash: "x" }), /UNIQUE/);
     w.close();
 
+    // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----
+    const sdb = openDb(fresh("sites.db"));
+    assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), null, "unknown until the worker fills the list");
+    sdb.replaceSupportedSites(["freewebnovel.com", "royalroad.com"]);
+    assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), true);
+    assert.strictEqual(sdb.isSupportedHost("www.RoyalRoad.com"), true, "www. and case ignored");
+    assert.strictEqual(sdb.isSupportedHost("example.com"), false);
+    sdb.replaceSupportedSites(["novelbin.com"]);
+    assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), false, "replace, not append");
+    sdb.close();
+
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log("✓ db test passed");
 })().catch(e => { console.error("✗", e); process.exit(1); });

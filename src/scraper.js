@@ -139,7 +139,10 @@ function createScraper(opts = {}) {
         return Buffer.from(await blob.arrayBuffer());
     }
 
-    return { getNovel, getChapter, buildEpub, parserNameFor, loadFailures: env.failed, ParserFactory };
+    /** Hostnames (without www.) that have a dedicated parser — no fetching involved. */
+    const supportedHosts = () => [...parserFactory.parsers.keys()];
+
+    return { getNovel, getChapter, buildEpub, parserNameFor, supportedHosts, loadFailures: env.failed, ParserFactory };
 }
 
 module.exports = { createScraper };

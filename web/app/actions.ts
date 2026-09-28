@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser, signOut } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { parseId, parseInterval, parseNovelUrl } from "@/lib/validate";
+import { checkSupportedSite, parseId, parseInterval, parseNovelUrl } from "@/lib/validate";
 
 export type AddState = { error?: string; ok?: boolean } | undefined;
 
@@ -14,6 +14,8 @@ export async function addNovelAction(_prev: AddState, form: FormData): Promise<A
   const parsed = parseNovelUrl(form.get("url"));
   if (!parsed.ok) return { error: parsed.error };
   const db = getDb();
+  const unsupported = checkSupportedSite(parsed.url, host => db.isSupportedHost(host));
+  if (unsupported) return { error: unsupported };
   const existing = db.findNovelByUrl(parsed.url);
   if (existing) redirect(`/novels/${existing.id}`);
   db.addNovel(parsed.url); // no title yet → "fetching info…" until the worker's next tick

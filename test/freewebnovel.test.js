@@ -44,6 +44,11 @@ const { mockSite, BASE } = require("./mockSite");
     assert.strictEqual(g.usingDefaultParser, true);
     assert.strictEqual(g.title, "Generic Story");
 
+    // Hostnames with a dedicated parser (what the web form validates against).
+    const hosts = s.supportedHosts();
+    assert.ok(hosts.includes("freewebnovel.com") && hosts.length > 500, `got ${hosts.length} hosts`);
+    assert.ok(!hosts.some(h => h.startsWith("www.")), "stored without www.");
+
     console.log("✓ freewebnovel harness test passed");
     console.log({ ...novel, _parser: undefined, chapters: novel.chapters.length });
     console.log(ch.html);

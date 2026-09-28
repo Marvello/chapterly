@@ -41,6 +41,7 @@ export interface Db {
   recordLoginFailure(id: number, lockedUntil: string | null): void;
   recordLoginSuccess(id: number): void;
   bindOidcSub(id: number, sub: string): number;
+  isSupportedHost(host: string): boolean | null;
 }
 
 const cache = globalThis as unknown as { __novelDb?: Db };

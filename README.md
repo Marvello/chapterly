@@ -103,6 +103,9 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 - Only sites with a dedicated WebToEpub parser are supported. Other sites would fall back to
   WebToEpub's DefaultParser, which needs per-site CSS configured in the extension's UI; headless it
   would turn any page's links into junk chapters, so they are rejected ("No WebToEpub parser for this site").
+  The worker publishes the ~636 supported hostnames to the DB at startup, so the web Add form rejects
+  other sites instantly. The ~25 sites WebToEpub matches by URL/page rules instead of hostname can
+  only be added with `cli.js add`.
 - Password login locks for up to 60 min after repeated failures, and anyone who can reach the login
   page can trigger that. On Tower, authentik (OIDC) stays usable while it's locked.
 - Sites that render chapters with client-side JS, or sit behind interactive Cloudflare challenges (Turnstile),

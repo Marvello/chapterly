@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INTERVALS, parseId, parseInterval, parseNovelUrl } from "./validate";
+import { INTERVALS, checkSupportedSite, parseId, parseInterval, parseNovelUrl } from "./validate";
 
 describe("parseNovelUrl", () => {
   it("normalizes whitespace and host case so the same novel isn't added twice", () => {
@@ -22,4 +22,19 @@ it("parseInterval accepts only the allowed values", () => {
 it("parseId accepts positive integers only", () => {
   expect(parseId("12")).toBe(12);
   for (const bad of ["0", "-1", "1.5", "1e3", "", null, "12abc"]) expect(parseId(bad)).toBeNull();
+});
+
+describe("checkSupportedSite", () => {
+  const list = new Set(["freewebnovel.com", "royalroad.com"]);
+  const lookup = (host: string) => list.has(host.replace(/^www\./, ""));
+  it("accepts hosts with a dedicated WebToEpub parser", () => {
+    expect(checkSupportedSite("https://freewebnovel.com/novel/x", lookup)).toBeNull();
+    expect(checkSupportedSite("https://www.royalroad.com/fiction/1", lookup)).toBeNull();
+  });
+  it("rejects other sites with a clear message", () => {
+    expect(checkSupportedSite("https://example.com/", lookup)).toBe("example.com isn't a supported site (no WebToEpub parser).");
+  });
+  it("doesn't block while the worker hasn't published the list yet", () => {
+    expect(checkSupportedSite("https://example.com/", () => null)).toBeNull();
+  });
 });

@@ -7,7 +7,7 @@ const os = require("os");
 const path = require("path");
 const { createScraper } = require("../src/scraper");
 const { openDb } = require("../src/db");
-const { checkNovel, isDue, nextRetryAt } = require("../src/worker");
+const { checkNovel, isDue, nextRetryAt, syncSupportedSites } = require("../src/worker");
 const { mockSite, BASE } = require("./mockSite");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-test-"));
@@ -113,6 +113,11 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     const bare = db.addNovel(`${BASE}?empty`); // distinct toc_url; served as the 0-chapter site
     await checkNovel(db, createScraper({ fetch: url => empty.fetch(String(url).replace("?empty", "")) }), bare, quiet);
     assert.match(db.getNovel(bare.id).last_error, /No chapters found/);
+
+    // The worker publishes the supported hostnames for the web form.
+    syncSupportedSites(db, s);
+    assert.strictEqual(db.isSupportedHost("freewebnovel.com"), true);
+    assert.strictEqual(db.isSupportedHost("example.com"), false);
 
     // Sites without a dedicated WebToEpub parser fall back to DefaultParser, which can't be configured
     // headless and turns any page's links into junk "chapters": reject them as unsupported.

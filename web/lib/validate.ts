@@ -25,3 +25,13 @@ export function parseInterval(input: unknown): number | null {
 export function parseId(input: unknown): number | null {
   return typeof input === "string" && /^[1-9]\d{0,9}$/.test(input) ? Number(input) : null;
 }
+
+/**
+ * Only sites with a dedicated WebToEpub parser can be scraped (the worker publishes the hostnames).
+ * Returns an error message, or null when supported — or when the list isn't published yet
+ * (lookup → null), in which case the worker's own check still rejects unsupported sites.
+ */
+export function checkSupportedSite(url: string, isSupportedHost: (host: string) => boolean | null): string | null {
+  const host = new URL(url).hostname.replace(/^www\./, "");
+  return isSupportedHost(host) === false ? `${host} isn't a supported site (no WebToEpub parser).` : null;
+}

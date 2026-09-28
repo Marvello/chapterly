@@ -107,8 +107,14 @@ async function checkDue(db, scraper, log = console.log) {
     }
 }
 
+/** Publish the hostnames WebToEpub has a dedicated parser for, so the web form can validate URLs. */
+function syncSupportedSites(db, scraper) {
+    db.replaceSupportedSites(scraper.supportedHosts());
+}
+
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
 async function runLoop(db, scraper, { tickMin = Number(process.env.NOVEL_TICK_MIN || 1), log = console.log } = {}) {
+    syncSupportedSites(db, scraper);
     log(`worker started: checking due novels every ${tickMin} min`);
     for (;;) {
         await checkDue(db, scraper, log);
@@ -116,4 +122,4 @@ async function runLoop(db, scraper, { tickMin = Number(process.env.NOVEL_TICK_MI
     }
 }
 
-module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt };
+module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt, syncSupportedSites };

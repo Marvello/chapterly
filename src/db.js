@@ -9,6 +9,7 @@ const { DatabaseSync } = require("node:sqlite");
 const MIGRATIONS_DIR = path.join(__dirname, "..", "db", "migrations");
 const now = () => new Date().toISOString();
 const normEmail = e => String(e).trim().toLowerCase();
+const normHost = h => String(h).trim().toLowerCase().replace(/^www\./, "");
 const CHAPTER_COLS = "id, idx, url, title, fetched_at, error, attempts, retry_at, (html IS NOT NULL) AS fetched";
 
 function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data", "novel.db")) {
@@ -95,6 +96,19 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
         failingChapters: novelId =>
             all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? AND html IS NULL AND attempts > 0 ORDER BY idx, id`,
                 novelId),
+
+        /** Replace the list of hostnames with a dedicated WebToEpub parser. */
+        replaceSupportedSites(hosts) {
+            tx(() => {
+                run("DELETE FROM supported_sites");
+                for (const h of new Set(hosts.map(normHost))) run("INSERT INTO supported_sites (host) VALUES (?)", h);
+            });
+        },
+        /** true / false, or null while the list is still empty (worker hasn't published it yet). */
+        isSupportedHost(host) {
+            if (!one("SELECT 1 AS x FROM supported_sites LIMIT 1")) return null;
+            return !!one("SELECT 1 AS x FROM supported_sites WHERE host = ?", normHost(host));
+        },
 
         createUser({ email, name, passwordHash }) {
             run("INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
