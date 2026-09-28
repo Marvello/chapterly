@@ -17,7 +17,7 @@ common-tech's `security.md`, and the worker stays the only process that scrapes.
 |---|---|
 | Who scrapes | **Only the worker.** The web app reads the DB and writes intents; it never fetches a site. |
 | Users | One account, created/changed from the CLI. No signup, no password reset. |
-| Login | **OIDC first (authentik on turing), email/password as fallback** (added 2026-09-28). Password login can be disabled with `AUTH_PASSWORD_LOGIN=false`. OIDC never creates accounts. |
+| Login | **Controlled by env.** Local: email/password only (no `AUTH_OIDC_*` set). Tower: OIDC first (authentik on turing), email/password as fallback, which can be disabled with `AUTH_PASSWORD_LOGIN=false`. OIDC never creates accounts. |
 | v1 scope | Login · library · add by URL · novel page · check now · pause/resume · delete · retry failed chapters · per-novel check interval. **Not** in v1: EPUB download, in-browser reader. |
 | Stack | folionix web stack (`auth-direction.md`): Next.js 16, NextAuth v5 Credentials + JWT session, bcryptjs, Tailwind v4, lucide-react, TypeScript, vitest. |
 | Database | **SQLite stays** — documented exception to `postgres-client.md` (user decision 2026-09-28). The standard's non-Postgres parts are adopted: `db/migrations/NNN_name.sql`, ledger `schema_migrations(version, name, applied_at)`, migrations run on start by each process, all SQL in one module (`src/db.js`). |
@@ -77,6 +77,17 @@ failure: "Sign-in failed." (unknown user, wrong password, locked, OIDC identity 
 No signup / forgot-password links.
 
 ### OIDC (authentik)
+
+**Enabled only when `AUTH_OIDC_ISSUER`, `AUTH_OIDC_ID` and `AUTH_OIDC_SECRET` are all set** — i.e. on
+Tower. Locally none are set, so the provider isn't registered and `/login` shows only the password
+form. Partial config (some but not all three) fails at startup with a clear error rather than
+silently half-working. `AUTH_PASSWORD_LOGIN` defaults to `true`; setting it to `false` without OIDC
+configured also fails at startup (would leave no way to log in).
+
+| Env | Local | Tower |
+|---|---|---|
+| `AUTH_OIDC_ISSUER` / `_ID` / `_SECRET` | unset | set (authentik) |
+| `AUTH_PASSWORD_LOGIN` | unset (= true) | `true` (fallback) or `false` |
 
 - NextAuth generic OIDC provider (`type: "oidc"`), configured by env: `AUTH_OIDC_ISSUER`
   (e.g. `https://auth.<domain>/application/o/novel/`), `AUTH_OIDC_ID`, `AUTH_OIDC_SECRET`,
@@ -150,8 +161,10 @@ Cloudflare Access sits in front on Tower as defense in depth; the app's own auth
   limit); OIDC mapping (bound sub → ok; verified email + unbound → binds; unverified email → reject;
   unknown email → reject; user already bound to another sub → reject); password login disabled by env; URL + interval validation; status badge + sort; relative time.
 - Manual end-to-end against local Docker in the browser (desktop + phone width, screenshots):
-  login via authentik (local authentik or turing's, redirect URI for localhost) + password fallback +
-  lockout, add novel → info → chapters, check now, retry, interval, pause, delete.
+  password login + lockout (OIDC not configured locally → no OIDC button), add novel → info → chapters, check now, retry, interval, pause, delete.
+- OIDC end to end is verified at the Tower deploy (login via authentik, first-login sub binding,
+  rejected foreign identity), not locally; locally OIDC is covered by the vitest mapping tests and a
+  config test (all/none/partial env).
 - Final `security.md` pass against the code: Pass / Gap / N/A per item recorded in `tasks/todo.md`.
 
 **Deploy**
