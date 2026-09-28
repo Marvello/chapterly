@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 
-const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
+const MIGRATIONS_DIR = path.join(__dirname, "..", "db", "migrations");
 const now = () => new Date().toISOString();
 
 function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data", "novel.db")) {
@@ -86,21 +86,31 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
     };
 }
 
-// Numbered .sql files, applied once each in order, tracked in schema_migrations.
+// common-tech migration style: db/migrations/NNN_name.sql applied in order, one ledger row each.
+// The whole run holds SQLite's write lock (BEGIN IMMEDIATE), so the web app and the worker
+// starting together serialize here — SQLite's stand-in for pg_advisory_lock.
 function migrate(db) {
-    db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
-    const done = new Set(db.prepare("SELECT name FROM schema_migrations").all().map(r => r.name));
-    for (const name of fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith(".sql")).sort()) {
-        if (done.has(name)) continue;
-        db.exec("BEGIN");
-        try {
-            db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8"));
-            db.prepare("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)").run(name, now());
-            db.exec("COMMIT");
-        } catch (e) {
-            db.exec("ROLLBACK");
-            throw new Error(`migration ${name} failed: ${e.message}`);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
+        const done = new Set(db.prepare("SELECT version FROM schema_migrations").all().map(r => r.version));
+        const files = fs.readdirSync(MIGRATIONS_DIR).filter(f => /^\d{3}_.+\.sql$/.test(f)).sort();
+        for (const file of files) {
+            const version = file.slice(0, 3);
+            if (done.has(version)) continue;
+            try {
+                db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"));
+            } catch (e) {
+                throw new Error(`migration ${file} failed: ${e.message}`);
+            }
+            db.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
+                .run(version, file.replace(/\.sql$/, ""), now());
         }
+        db.exec("COMMIT");
+    } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
     }
 }
 

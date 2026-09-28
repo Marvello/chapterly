@@ -9,7 +9,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY cli.js ./
 COPY src src
-COPY migrations migrations
+COPY db db
 
 ENV NODE_ENV=production \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning \
