@@ -6,7 +6,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const { DatabaseSync } = require("node:sqlite");
-const { openDb } = require("../src/db");
+const { openDb } = require("../../shared/db");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-db-test-"));
 const fresh = name => path.join(tmp, name);
@@ -28,7 +28,7 @@ const fresh = name => path.join(tmp, name);
     const file = fresh("race.db");
     const child = () => new Promise(resolve => {
         const p = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "-e",
-            `require(${JSON.stringify(path.join(__dirname, "..", "src", "db.js"))}).openDb(${JSON.stringify(file)}).close()`]);
+            `require(${JSON.stringify(path.join(__dirname, "..", "..", "shared", "db.js"))}).openDb(${JSON.stringify(file)}).close()`]);
         let err = "";
         p.stderr.on("data", d => { err += d; });
         p.on("exit", code => resolve({ code, err }));

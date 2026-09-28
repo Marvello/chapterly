@@ -6,7 +6,7 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const bcrypt = require("bcryptjs");
-const { openDb } = require("../src/db");
+const { openDb } = require("../../shared/db");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-cli-test-"));
 const env = { ...process.env, NOVEL_DB: path.join(tmp, "novel.db"), BCRYPT_ROUNDS: "4",

@@ -1,6 +1,8 @@
 services:
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
     image: novel-harness
     container_name: novel-worker
     restart: unless-stopped

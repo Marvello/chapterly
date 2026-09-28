@@ -1,15 +1,16 @@
+# Build context: repo root (needs shared/). Same layout as the repo: /app/worker + /app/shared.
 FROM node:24-slim
-WORKDIR /app
+WORKDIR /app/worker
 
 # WebToEpub (GPLv3) straight from upstream; rebuild with --no-cache to pull parser fixes.
 ADD --keep-git-dir=false https://github.com/dteviot/WebToEpub.git#ExperimentalTabMode vendor-WebToEpub
 
-COPY package.json package-lock.json ./
+COPY worker/package.json worker/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY cli.js ./
-COPY src src
-COPY db db
+COPY worker/cli.js ./
+COPY worker/src src
+COPY shared /app/shared
 
 ENV NODE_ENV=production \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning \

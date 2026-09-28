@@ -1,5 +1,5 @@
-// Typed bridge to ../src/db.js — the ONLY module with SQL, shared with the worker.
-// Loaded at runtime from NOVEL_ROOT (not bundled): it uses node:sqlite and reads db/migrations/*.sql.
+// Typed bridge to ../shared/db.js — the ONLY module with SQL, shared with the worker.
+// Loaded at runtime from NOVEL_SHARED_DIR (not bundled): it uses node:sqlite and reads migrations/*.sql.
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -48,9 +48,9 @@ const cache = globalThis as unknown as { __novelDb?: Db };
 
 export function getDb(): Db {
   if (!cache.__novelDb) {
-    const root = path.resolve(process.env.NOVEL_ROOT || path.join(process.cwd(), ".."));
-    const req = createRequire(path.join(root, "package.json"));
-    const mod = req(path.join(root, "src", "db.js")) as { openDb: () => Db };
+    const dir = path.resolve(process.env.NOVEL_SHARED_DIR || path.join(process.cwd(), "..", "shared"));
+    const req = createRequire(path.join(dir, "package.json"));
+    const mod = req(path.join(dir, "db.js")) as { openDb: () => Db };
     cache.__novelDb = mod.openDb(); // runs pending migrations (under the write lock)
   }
   return cache.__novelDb;

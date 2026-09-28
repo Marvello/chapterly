@@ -6,7 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { createScraper } = require("../src/scraper");
-const { openDb } = require("../src/db");
+const { openDb } = require("../../shared/db");
 const { checkNovel, isDue, nextRetryAt, syncSupportedSites } = require("../src/worker");
 const { mockSite, BASE } = require("./mockSite");
 

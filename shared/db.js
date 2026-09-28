@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 
-const MIGRATIONS_DIR = path.join(__dirname, "..", "db", "migrations");
+const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const now = () => new Date().toISOString();
 const normEmail = e => String(e).trim().toLowerCase();
 const normHost = h => String(h).trim().toLowerCase().replace(/^www\./, "");
@@ -137,7 +137,7 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
     };
 }
 
-// common-tech migration style: db/migrations/NNN_name.sql applied in order, one ledger row each.
+// common-tech migration style: migrations/NNN_name.sql applied in order, one ledger row each.
 // The whole run holds SQLite's write lock (BEGIN IMMEDIATE), so the web app and the worker
 // starting together serialize here — SQLite's stand-in for pg_advisory_lock.
 function migrate(db) {

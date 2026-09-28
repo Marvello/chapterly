@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { diffChapters } = require("./diff");
 
-const LIBRARY = () => process.env.NOVEL_LIBRARY || path.join(__dirname, "..", "library");
+const LIBRARY = () => process.env.NOVEL_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
 // (1h, 2h, 4h, 8h by default); after MAX_ATTEMPTS failures stop until `cli.js retry <id>`.
 const retryPolicy = () => ({

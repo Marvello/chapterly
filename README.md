@@ -9,11 +9,17 @@ instead of writing our own. (FanFicFare supports updates but not freewebnovel, t
 Target: Tower homelab (Docker, next to Audiobookshelf), Node 24, public access only via
 Cloudflare Tunnel + Access.
 
-## Setup
-    ./setup.sh          # clones WebToEpub into vendor-WebToEpub/ and runs npm install
-    npm test            # offline tests (synthetic freewebnovel-shaped site, incl. full pipeline)
+## Layout
+    shared/     db.js (the only module with SQL) + migrations/ — used by both worker and web
+    worker/     scraper + scheduler + CLI (cli.js, src/, test/, vendor-WebToEpub/)
+    web/        Next.js UI (reads the DB, records intents; never scrapes)
 
-Re-run `./setup.sh` to pull upstream parser fixes.
+## Setup
+    npm run setup       # worker/setup.sh (clones WebToEpub into worker/vendor-WebToEpub/, npm install) + web install
+    npm test            # worker tests (synthetic freewebnovel-shaped site, incl. full pipeline) + web tests
+
+Re-run `worker/setup.sh` to pull upstream parser fixes. CLI commands below run from `worker/`
+(`cd worker && node cli.js …`) or in Docker (`docker compose exec worker node cli.js …`).
 
 ## Run with Docker
     cp .env.example .env && sed -i '' "s|^AUTH_SECRET=.*|AUTH_SECRET=$(openssl rand -base64 32)|" .env
@@ -52,10 +58,10 @@ stops the web container at startup. authentik setup:
     node cli.js build  <id>                                    # rebuild EPUB from stored chapters
     node cli.js pause|resume|remove <id>
     node cli.js retry  <id>                                    # retry chapters that gave up
-    npm run worker                                             # run forever (see below)
+    npm run worker                                             # run forever (from worker/)
 
-- **Storage:** SQLite at `NOVEL_DB` (default `data/novel.db`), via built-in `node:sqlite` (Node 24).
-  All SQL lives in `src/db.js`; migrations are numbered files in `migrations/`. Postgres later =
+- **Storage:** SQLite at `NOVEL_DB` (default `data/novel.db` at the repo root), via built-in `node:sqlite` (Node 24).
+  All SQL lives in `shared/db.js`; migrations are numbered files in `shared/migrations/`. Postgres later =
   rewrite `db.js`, callers unchanged.
 - **Worker:** wakes every `NOVEL_TICK_MIN` (default 1) and checks each active novel that was asked to "check now" or whose last
   check started ≥ `check_interval_min` (default 1440 = once a day) ago, one novel at a time. New chapters are
@@ -66,9 +72,9 @@ stops the web container at startup. authentik setup:
   during a check, so with daily checks a failing chapter is retried at most once a day. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.)
 - **EPUB:** packed by WebToEpub's own `EpubPacker` (EPUB 3 + toc.ncx, cover embedded), written to
-  `NOVEL_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/`) via temp file + rename. The
+  `NOVEL_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
   path is fixed on first build, so Audiobookshelf keeps it as one item.
-- `node:sqlite` prints an ExperimentalWarning on Node 24; `npm run worker` hides it, or set
+- `node:sqlite` prints an ExperimentalWarning on Node 24; `npm --prefix worker run worker` hides it, or set
   `NODE_OPTIONS=--disable-warning=ExperimentalWarning`.
 
 ## CLI (scraper debugging)
@@ -77,25 +83,25 @@ stops the web container at startup. authentik setup:
     node cli.js chapter https://freewebnovel.com/novel/<slug> 1
     node cli.js check   https://freewebnovel.com/novel/<slug> known.json   # new chapters only
 
-Requests go through `src/browserFetch.js` (got-scraping: Chrome-like TLS + headers), which passes
+Requests go through `worker/src/browserFetch.js` (got-scraping: Chrome-like TLS + headers), which passes
 Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, set
 `NOVEL_COOKIE="cf_clearance=..."` plus `NOVEL_UA` (that browser's exact User-Agent).
 
 ## API
-    const { createScraper } = require("./src/scraper");
-    const { diffChapters } = require("./src/diff");
+    const { createScraper } = require("./worker/src/scraper");
+    const { diffChapters } = require("./worker/src/diff");
     const s = createScraper();                     // ~0.5s, load once per worker
     const novel = await s.getNovel(tocUrl);        // {title, author, cover, chapters:[{index,url,title}], ...}
     const ch = await s.getChapter(novel, url);     // {title, html, text, warnings}; honours parser throttle
     const { added } = diffChapters(storedChapters, novel.chapters);
 
 ## How it works
-- `src/loader.js` reads `popup.html` to get WebToEpub's script order, loads every core + parser
+- `worker/src/loader.js` reads `popup.html` to get WebToEpub's script order, loads every core + parser
   file into one jsdom VM context, and stubs the extension-only parts (chrome.*, progress bar,
   chapter table UI, i18n from `_locales/en`). Node supplies fetch, TextDecoder, etc.
 - zip.js and DOMPurify (WebToEpub's npm deps, normally copied into `plugin/` by its postinstall) are
   loaded from this project's `node_modules/`.
-- `src/scraper.js` mirrors the extension flow: pick parser by hostname -> `getChapterUrls`
+- `worker/src/scraper.js` mirrors the extension flow: pick parser by hostname -> `getChapterUrls`
   (incl. paginated TOCs) -> `fetchChapter` -> `convertRawDomToContent` (the same cleanup the
   EPUB gets). Images are left as absolute URLs for the EPUB builder to download.
 
@@ -115,8 +121,8 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 - WebToEpub is GPLv3: fine for personal use; if you distribute this, it must be GPLv3 too.
 
 ## Rules
-- Keep `vendor-WebToEpub/` unmodified; `./setup.sh` pulls upstream parser fixes. Patches go in
-  `src/loader.js` (stubs/polyfills), never in vendor files.
+- Keep `worker/vendor-WebToEpub/` unmodified; `worker/setup.sh` pulls upstream parser fixes. Patches go in
+  `worker/src/loader.js` (stubs/polyfills), never in vendor files.
 - Be polite to sites: parser throttle, one request per site at a time, daily checks. Prefer a
   novel's original translator site over aggregators when WebToEpub supports it.
 

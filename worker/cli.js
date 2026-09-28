@@ -20,7 +20,7 @@
 const fs = require("fs");
 const { createScraper } = require("./src/scraper");
 const { diffChapters } = require("./src/diff");
-const { openDb } = require("./src/db");
+const { openDb } = require("../shared/db");
 const worker = require("./src/worker");
 const bcrypt = require("bcryptjs");
 const { logSecurity } = require("./src/securityLog");
