@@ -89,6 +89,10 @@ the https hostname.
   it stops and `list` shows the error. `node cli.js retry <id>` resets it. Retries only happen
   during a check, so with daily checks a failing chapter is retried at most once a day. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.)
+- **Story status:** each novel is ongoing / completed / dropped — read from the site's `og:novel:status`
+  tag on every check, unless you set it yourself (novel page or `cli.js series <id> <status>`), after
+  which the site never overrides it. Completed + every chapter fetched → no more scheduled checks
+  (only "Check now"); dropped (author or site abandoned it) → checked at most weekly.
 - **EPUB:** packed by WebToEpub's own `EpubPacker` (EPUB 3 + toc.ncx, cover embedded), written to
   `CHAPTERLY_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
   path is fixed on first build, so Audiobookshelf keeps it as one item.

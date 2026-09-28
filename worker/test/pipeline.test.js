@@ -107,6 +107,23 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.ok(isDue({ ...due, last_checked_at: ago(60) }, t));
     assert.ok(isDue({ ...due, last_checked_at: ago(1), check_requested_at: ago(0) }, t), "check now");
     assert.ok(!isDue({ ...due, status: "paused", last_checked_at: null, check_requested_at: ago(0) }, t));
+    // Series status: completed + everything fetched → no more scheduled checks; dropped → weekly at most.
+    const done = { ...due, series_status: "completed", chapters_total: 10, chapters_fetched: 10 };
+    assert.ok(!isDue({ ...done, last_checked_at: ago(100000) }, t), "finished completed novel is never due");
+    assert.ok(isDue({ ...done, last_checked_at: ago(1), check_requested_at: ago(0) }, t), "check now still works");
+    assert.ok(isDue({ ...done, chapters_fetched: 9, last_checked_at: ago(60) }, t), "completed but missing chapters");
+    const dropped = { ...due, series_status: "dropped", check_interval_min: 1440 };
+    assert.ok(!isDue({ ...dropped, last_checked_at: ago(1440 * 6) }, t));
+    assert.ok(isDue({ ...dropped, last_checked_at: ago(10080) }, t));
+
+    // The worker applies the site's status (unless you set it yourself).
+    site.status = "Completed";
+    await checkNovel(db, s, db.getNovel(id), quiet);
+    assert.strictEqual(db.getNovel(id).series_status, "completed");
+    db.setSeriesStatus(id, "ongoing");
+    await checkNovel(db, s, db.getNovel(id), quiet);
+    assert.strictEqual(db.getNovel(id).series_status, "ongoing", "manual choice kept");
+    site.status = "OnGoing";
 
     // A URL that yields no chapters (unsupported page) is an error, not a silent "0/0" novel.
     const empty = mockSite(0);

@@ -6,6 +6,7 @@
 //   node cli.js build   <id>                     rebuild the EPUB from stored chapters
 //   node cli.js pause|resume|remove <id>         stop/start scheduled checks, or delete the novel (EPUB file is kept)
 //   node cli.js retry   <id>                     reset failed chapters' attempts so the next check retries them
+//   node cli.js series  <id> ongoing|completed|dropped   mark the story's status (completed + fully fetched = no more checks)
 //   node cli.js user:create <email> [name]       create the login account (password prompted, hidden)
 //   node cli.js user:password <email>            change the password (logs out all sessions)
 //   node cli.js user:unlink-oidc <email>         forget the linked authentik identity
@@ -27,7 +28,7 @@ const { logSecurity } = require("./src/securityLog");
 
 const [cmd, arg1, arg2] = process.argv.slice(2);
 const strip = n => ({ ...n, _parser: undefined });
-const usage = () => fs.readFileSync(__filename, "utf8").split("\n").slice(1, 18).join("\n");
+const usage = () => fs.readFileSync(__filename, "utf8").split("\n").slice(1, 19).join("\n");
 
 function scraper() {
     const s = createScraper({
@@ -100,7 +101,7 @@ function userByEmail(db, email) {
         const rows = openDb().listNovels();
         if (!rows.length) console.log("no novels yet — `node cli.js add <tocUrl>`");
         for (const n of rows) {
-            console.log(`#${n.id} [${n.status}] ${n.title || n.toc_url} — ${n.chapters_fetched}/${n.chapters_total} chapters` +
+            console.log(`#${n.id} [${n.status}${n.series_status !== "ongoing" ? `, ${n.series_status}` : ""}] ${n.title || n.toc_url} — ${n.chapters_fetched}/${n.chapters_total} chapters` +
                 `${n.chapters_failing ? ` (${n.chapters_failing} failing)` : ""}` +
                 `, checked ${n.last_checked_at || "never"}${n.last_error ? `\n     error: ${n.last_error}` : ""}` +
                 `${n.epub_path ? `\n     epub: ${n.epub_path}` : ""}`);
@@ -123,6 +124,13 @@ function userByEmail(db, email) {
         const db = openDb(), n = novelById(db, arg1);
         db.setStatus(n.id, cmd === "pause" ? "paused" : "active");
         console.log(`#${n.id} ${cmd === "pause" ? "paused" : "active"}`);
+        break;
+    }
+    case "series": {
+        const db = openDb(), n = novelById(db, arg1);
+        if (!["ongoing", "completed", "dropped"].includes(arg2)) throw new Error("status must be ongoing, completed or dropped");
+        db.setSeriesStatus(n.id, arg2);
+        console.log(`#${n.id}: ${arg2} (set by you; the site's status no longer overrides it)`);
         break;
     }
     case "retry": {

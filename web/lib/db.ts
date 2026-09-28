@@ -10,6 +10,7 @@ export interface NovelRow {
   last_checked_at: string | null; last_success_at: string | null; last_error: string | null;
   epub_path: string | null; epub_built_at: string | null; created_at: string;
   check_requested_at: string | null; check_finished_at: string | null;
+  series_status: "ongoing" | "completed" | "dropped"; series_status_manual: 0 | 1;
 }
 export interface LibraryRow extends NovelRow {
   chapters_total: number; chapters_fetched: number; chapters_failing: number; chapters_new: number;
@@ -29,6 +30,7 @@ export interface Db {
   listNovels(newSince?: string): LibraryRow[];
   requestCheck(id: number): void;
   setCheckInterval(id: number, minutes: number): void;
+  setSeriesStatus(id: number, status: "ongoing" | "completed" | "dropped"): void;
   setStatus(id: number, status: "active" | "paused"): void;
   deleteNovel(id: number): void;
   resetChapterRetries(novelId: number): void;

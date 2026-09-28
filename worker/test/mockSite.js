@@ -8,14 +8,14 @@ const BASE = "https://freewebnovel.com/novel/test-story";
 const COVER = Buffer.from("ffd8ffe000104a46494600010100000100010000ffd9", "hex");
 
 function mockSite(chapterCount = 5) {
-    const site = { chapterCount, requests: [], broken: new Set() };
+    const site = { chapterCount, requests: [], broken: new Set(), status: "OnGoing" };
     const chLinks = (from, to) => Array.from({ length: Math.max(0, to - from + 1) }, (_, i) =>
         `<li><a href="/novel/test-story/chapter-${from + i}">Chapter ${from + i}</a></li>`).join("");
 
     function page(url) {
         const n = site.chapterCount;
         if (url === BASE) {
-            return `<html><head><title>Test Story</title></head><body>
+            return `<html><head><title>Test Story</title><meta property="og:novel:status" content="${site.status}"></head><body>
               <h1 class="tit">Test Story</h1>
               <div class="pic"><img src="/files/cover.jpg"></div>
               <div class="item"><span title="Author"></span><div class="right"><a>Jane Placeholder</a></div></div>

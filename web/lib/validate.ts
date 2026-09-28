@@ -35,3 +35,14 @@ export function checkSupportedSite(url: string, isSupportedHost: (host: string) 
   const host = new URL(url).hostname.replace(/^www\./, "");
   return isSupportedHost(host) === false ? `${host} isn't a supported site (no WebToEpub parser).` : null;
 }
+
+export const SERIES_STATUSES = [
+  { value: "ongoing", label: "Ongoing" },
+  { value: "completed", label: "Completed" },
+  { value: "dropped", label: "Dropped" },
+] as const;
+export type SeriesStatus = (typeof SERIES_STATUSES)[number]["value"];
+
+export function parseSeriesStatus(input: unknown): SeriesStatus | null {
+  return SERIES_STATUSES.find(s => s.value === input)?.value ?? null;
+}

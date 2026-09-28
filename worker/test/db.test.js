@@ -97,6 +97,19 @@ const fresh = name => path.join(tmp, name);
     assert.throws(() => w.createUser({ email: "me@example.com", name: null, passwordHash: "x" }), /UNIQUE/);
     w.close();
 
+    // ---- series status (ongoing / completed / dropped) ----
+    const ss = openDb(fresh("series.db"));
+    const sn = ss.addNovel("https://example.com/novel/s");
+    assert.deepStrictEqual([sn.series_status, sn.series_status_manual], ["ongoing", 0]);
+    ss.applySiteSeriesStatus(sn.id, "completed");
+    assert.strictEqual(ss.getNovel(sn.id).series_status, "completed", "site status applies while not set manually");
+    ss.setSeriesStatus(sn.id, "dropped");
+    assert.deepStrictEqual([ss.getNovel(sn.id).series_status, ss.getNovel(sn.id).series_status_manual], ["dropped", 1]);
+    ss.applySiteSeriesStatus(sn.id, "ongoing");
+    assert.strictEqual(ss.getNovel(sn.id).series_status, "dropped", "the site never overrides your choice");
+    assert.throws(() => ss.setSeriesStatus(sn.id, "paused"), /CHECK/);
+    ss.close();
+
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----
     const sdb = openDb(fresh("sites.db"));
     assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), null, "unknown until the worker fills the list");

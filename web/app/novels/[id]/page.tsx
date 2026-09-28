@@ -7,10 +7,11 @@ import AutoRefresh from "@/components/AutoRefresh";
 import DeleteButton from "@/components/DeleteButton";
 import Header from "@/components/Header";
 import IntervalSelect from "@/components/IntervalSelect";
+import SeriesStatusSelect from "@/components/SeriesStatusSelect";
 import StatusBadge from "@/components/StatusBadge";
 import { getDb } from "@/lib/db";
 import { parseId } from "@/lib/validate";
-import { displayTitle, isChecking, novelStatus, relativeTime } from "@/lib/view";
+import { displayTitle, isChecking, isSeriesDone, nextCheckAt, novelStatus, relativeTime } from "@/lib/view";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
@@ -30,8 +31,9 @@ export default async function NovelPage({ params, searchParams }:
   const failing = db.failingChapters(n.id);
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
-  const nextCheck = n.last_checked_at
-    ? new Date(Date.parse(n.last_checked_at) + n.check_interval_min * 60_000).toISOString() : null;
+  const nextCheck = nextCheckAt(n);
+  const counts = db.listNovels().find(r => r.id === n.id);
+  const done = counts ? isSeriesDone(counts) : false;
   const idField = <input type="hidden" name="id" value={n.id} />;
 
   return (
@@ -55,7 +57,9 @@ export default async function NovelPage({ params, searchParams }:
             </a>
           </p>
           <p className="text-sm text-tmuted">Checked {relativeTime(n.last_checked_at)}
-            {n.status === "active" && nextCheck && !isChecking(n) && <> · next {relativeTime(nextCheck)}</>}</p>
+            {n.status === "active" && !isChecking(n) && (done
+              ? <> · no more checks — completed</>
+              : nextCheck && <> · next {relativeTime(nextCheck)}{n.series_status === "dropped" && " (dropped: weekly at most)"}</>)}</p>
           {n.epub_path && <p className="break-all font-mono text-xs text-tmuted">{n.epub_path}</p>}
         </div>
       </section>
@@ -71,6 +75,7 @@ export default async function NovelPage({ params, searchParams }:
           <button className={btn}>{n.status === "paused" ? <><Play className="size-4" /> Resume</> : <><Pause className="size-4" /> Pause</>}</button>
         </form>
         <IntervalSelect id={n.id} minutes={n.check_interval_min} />
+        <SeriesStatusSelect id={n.id} status={n.series_status} manual={!!n.series_status_manual} />
         <DeleteButton id={n.id} />
       </section>
 

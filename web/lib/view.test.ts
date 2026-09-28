@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { newSince, novelStatus, relativeTime, sortLibrary } from "./view";
+import { isSeriesDone, newSince, nextCheckAt, novelStatus, relativeTime, sortLibrary } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
   description: null, cover_url: null, status: "active", check_interval_min: 1440, last_checked_at: null,
   last_success_at: null, last_error: null, epub_path: null, epub_built_at: null, created_at: "",
-  check_requested_at: null, check_finished_at: null,
+  check_requested_at: null, check_finished_at: null, series_status: "ongoing", series_status_manual: 0,
   chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, ...o,
 });
 
@@ -44,4 +44,19 @@ it("relativeTime", () => {
 
 it("newSince is 24 h before now", () => {
   expect(newSince(Date.parse("2026-01-02T00:00:00Z"))).toBe("2026-01-01T00:00:00.000Z");
+});
+
+it("isSeriesDone: completed and every chapter fetched", () => {
+  expect(isSeriesDone(row({ series_status: "completed", chapters_total: 5, chapters_fetched: 5 }))).toBe(true);
+  expect(isSeriesDone(row({ series_status: "completed", chapters_total: 5, chapters_fetched: 4 }))).toBe(false);
+  expect(isSeriesDone(row({ series_status: "completed", chapters_total: 0, chapters_fetched: 0 }))).toBe(false);
+  expect(isSeriesDone(row({ series_status: "ongoing", chapters_total: 5, chapters_fetched: 5 }))).toBe(false);
+});
+
+it("nextCheckAt mirrors the worker: interval after the last check, at least weekly when dropped", () => {
+  const base = { last_checked_at: "2026-01-01T00:00:00.000Z", check_interval_min: 1440 };
+  expect(nextCheckAt({ ...base, series_status: "ongoing" })).toBe("2026-01-02T00:00:00.000Z");
+  expect(nextCheckAt({ ...base, series_status: "dropped" })).toBe("2026-01-08T00:00:00.000Z");
+  expect(nextCheckAt({ ...base, series_status: "dropped", check_interval_min: 20160 })).toBe("2026-01-15T00:00:00.000Z");
+  expect(nextCheckAt({ ...base, last_checked_at: null, series_status: "ongoing" })).toBeNull();
 });

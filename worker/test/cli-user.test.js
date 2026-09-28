@@ -50,5 +50,17 @@ db.close();
 r = cli(["user:password", "nobody@example.com"], "whatever long password\n");
 assert.notStrictEqual(r.status, 0);
 
+// series <id> <status>
+db = openDb(env.CHAPTERLY_DB);
+const nid = db.addNovel("https://example.com/novel/cli").id;
+db.close();
+r = cli(["series", String(nid), "completed"]);
+assert.strictEqual(r.status, 0, r.stderr);
+db = openDb(env.CHAPTERLY_DB);
+assert.deepStrictEqual([db.getNovel(nid).series_status, db.getNovel(nid).series_status_manual], ["completed", 1]);
+db.close();
+r = cli(["series", String(nid), "paused"]);
+assert.notStrictEqual(r.status, 0, "only ongoing / completed / dropped");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("✓ cli user test passed");

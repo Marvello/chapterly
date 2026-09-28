@@ -32,6 +32,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempt
         if (novel.usingDefaultParser) throw new Error(`No WebToEpub parser for this site (${new URL(novelRow.toc_url).hostname})`);
         if (!novel.chapters.length) throw new Error(`No chapters found at ${novelRow.toc_url} (parser ${novel.parser})`);
         db.updateNovelMeta(id, novel);
+        if (novel.siteStatus) db.applySiteSeriesStatus(id, novel.siteStatus);
         const { added } = diffChapters(db.chapters(id), novel.chapters);
         db.addChapters(id, added);
 
@@ -97,8 +98,19 @@ async function buildEpub(db, scraper, id) {
     return file;
 }
 
-const isDue = (n, at = Date.now()) => n.status === "active" && (!!n.check_requested_at || !n.last_checked_at ||
-    at - Date.parse(n.last_checked_at) >= n.check_interval_min * 60_000);
+const WEEK_MIN = 7 * 24 * 60;
+
+/**
+ * Due when active and: "check now" requested, never checked, or the interval passed since the last start.
+ * Completed + every chapter fetched → never (only "check now"); dropped → at most weekly.
+ */
+function isDue(n, at = Date.now()) {
+    if (n.status !== "active") return false;
+    if (n.check_requested_at) return true;
+    if (n.series_status === "completed" && n.chapters_total > 0 && n.chapters_fetched >= n.chapters_total) return false;
+    const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
+    return !n.last_checked_at || at - Date.parse(n.last_checked_at) >= intervalMin * 60_000;
+}
 
 /** Check every due novel, one at a time (so at most one request per site at once). */
 async function checkDue(db, scraper, log = console.log) {

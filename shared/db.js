@@ -44,6 +44,12 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
             GROUP BY n.id ORDER BY n.id`, newSince),
         requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
+        /** Your choice: from now on the site's status never overrides it. */
+        setSeriesStatus: (id, status) =>
+            run("UPDATE novels SET series_status = ?, series_status_manual = 1 WHERE id = ?", status, id),
+        /** Status read from the site; ignored once you've set it yourself. */
+        applySiteSeriesStatus: (id, status) =>
+            run("UPDATE novels SET series_status = ? WHERE id = ? AND series_status_manual = 0", status, id),
         setCheckInterval: (id, minutes) => run("UPDATE novels SET check_interval_min = ? WHERE id = ?", minutes, id),
         setStatus: (id, status) => run("UPDATE novels SET status = ? WHERE id = ?", status, id),
         deleteNovel: id => run("DELETE FROM novels WHERE id = ?", id),

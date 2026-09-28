@@ -36,3 +36,16 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
 
 /** Chapters fetched at/after this time count as "+N new" in the library (last 24 h). */
 export const newSince = (now = Date.now()) => new Date(now - 86_400_000).toISOString();
+
+/** Completed story with every chapter fetched: the worker no longer checks it (only "check now"). */
+export const isSeriesDone = (n: Pick<LibraryRow, "series_status" | "chapters_total" | "chapters_fetched">) =>
+  n.series_status === "completed" && n.chapters_total > 0 && n.chapters_fetched >= n.chapters_total;
+
+const WEEK_MIN = 7 * 24 * 60;
+
+/** When the worker will next check (same rule as worker/src/worker.js isDue): dropped → at least weekly. */
+export function nextCheckAt(n: Pick<NovelRow, "last_checked_at" | "check_interval_min" | "series_status">): string | null {
+  if (!n.last_checked_at) return null;
+  const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
+  return new Date(Date.parse(n.last_checked_at) + intervalMin * 60_000).toISOString();
+}

@@ -1,7 +1,7 @@
 // Offline test: runs WebToEpub's real FreeWebNovelComParser over the synthetic site in mockSite.js.
 "use strict";
 const assert = require("assert");
-const { createScraper } = require("../src/scraper");
+const { createScraper, mapSiteStatus } = require("../src/scraper");
 const { mockSite, BASE } = require("./mockSite");
 
 (async () => {
@@ -17,6 +17,11 @@ const { mockSite, BASE } = require("./mockSite");
     assert.strictEqual(novel.cover, "https://freewebnovel.com/files/cover.jpg");
     assert.strictEqual(novel.chapters.length, 5, "should merge paginated TOC");
     assert.strictEqual(novel.chapters[4].url, `${BASE}/chapter-5`);
+
+    // Series status from the standard og:novel:status tag.
+    assert.strictEqual(novel.siteStatus, "ongoing");
+    assert.deepStrictEqual(["Completed", "Finished", "Ended", "Dropped", "Hiatus", "Suspended", "OnGoing", "Pending", ""].map(mapSiteStatus),
+        ["completed", "completed", "completed", "dropped", "dropped", "dropped", "ongoing", "ongoing", null]);
 
     const ch = await s.getChapter(novel, novel.chapters[0].url, { throttle: false });
     assert.strictEqual(ch.title, "Chapter 1: Placeholder Title");

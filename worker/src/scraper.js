@@ -5,6 +5,15 @@
 "use strict";
 const { loadWebToEpub } = require("./loader");
 
+/** Site's og:novel:status text → ongoing / completed / dropped, or null when absent. */
+function mapSiteStatus(text) {
+    const t = String(text || "").trim().toLowerCase();
+    if (!t) return null;
+    if (/drop|hiatus|abandon|discontinu|cancel|suspend/.test(t)) return "dropped";
+    if (/complet|finish|\bended\b/.test(t)) return "completed";   // whole word: not "pending"/"suspended"
+    return "ongoing";
+}
+
 function createScraper(opts = {}) {
     const errors = [];
     const env = loadWebToEpub({ ...opts, onError: e => errors.push(String(e?.message || e)) });
@@ -56,6 +65,7 @@ function createScraper(opts = {}) {
                 .map(n => n.textContent.trim()).filter(Boolean).join("\n\n");
         } catch { /* optional */ }
         return {
+            siteStatus: mapSiteStatus(dom.querySelector('meta[property="og:novel:status"]')?.getAttribute("content")),
             url: tocUrl,
             parser: parser.constructor.name,
             usingDefaultParser: parser instanceof DefaultParser,
@@ -145,4 +155,4 @@ function createScraper(opts = {}) {
     return { getNovel, getChapter, buildEpub, parserNameFor, supportedHosts, loadFailures: env.failed, ParserFactory };
 }
 
-module.exports = { createScraper };
+module.exports = { createScraper, mapSiteStatus };

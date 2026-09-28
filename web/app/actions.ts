@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser, signOut } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { checkSupportedSite, parseId, parseInterval, parseNovelUrl } from "@/lib/validate";
+import { checkSupportedSite, parseId, parseInterval, parseNovelUrl, parseSeriesStatus } from "@/lib/validate";
 
 export type AddState = { error?: string; ok?: boolean } | undefined;
 
@@ -53,6 +53,12 @@ export async function setIntervalAction(form: FormData) {
   const minutes = parseInterval(form.get("minutes"));
   if (!minutes) return;
   await withNovel(form, id => getDb().setCheckInterval(id, minutes));
+}
+
+export async function setSeriesStatusAction(form: FormData) {
+  const status = parseSeriesStatus(form.get("series_status"));
+  if (!status) return;
+  await withNovel(form, id => getDb().setSeriesStatus(id, status));
 }
 
 export async function deleteAction(form: FormData) {
