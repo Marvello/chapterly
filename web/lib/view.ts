@@ -1,0 +1,35 @@
+import type { LibraryRow, NovelRow } from "./db";
+
+export type Status = "paused" | "fetching_info" | "checking" | "error" | "active";
+
+type StatusFields = Pick<NovelRow, "status" | "title" | "last_checked_at" | "check_finished_at" | "check_requested_at" | "last_error">;
+
+/** A check is queued ("check now") or running (started after the last finish). */
+export const isChecking = (n: StatusFields) =>
+  !!n.check_requested_at || (!!n.last_checked_at && n.last_checked_at > (n.check_finished_at ?? ""));
+
+export function novelStatus(n: StatusFields): Status {
+  if (n.status === "paused") return "paused";
+  if (!n.title && !n.check_finished_at) return "fetching_info";
+  if (isChecking(n)) return "checking";
+  if (n.last_error) return "error";
+  return "active";
+}
+
+export const displayTitle = (n: Pick<NovelRow, "title" | "toc_url">) => n.title || n.toc_url;
+
+export function sortLibrary(rows: LibraryRow[]): LibraryRow[] {
+  return [...rows].sort((a, b) =>
+    Number(b.chapters_new > 0) - Number(a.chapters_new > 0) ||
+    displayTitle(a).localeCompare(displayTitle(b), undefined, { sensitivity: "base" }));
+}
+
+export function relativeTime(iso: string | null, now = Date.now()): string {
+  if (!iso) return "never";
+  const diff = now - Date.parse(iso);
+  const abs = Math.abs(diff);
+  if (abs < 60_000) return "just now";
+  const [n, unit] = abs < 3_600_000 ? [abs / 60_000, "m"] : abs < 86_400_000 ? [abs / 3_600_000, "h"] : [abs / 86_400_000, "d"];
+  const v = Math.floor(n);
+  return diff >= 0 ? `${v}${unit} ago` : `in ${v}${unit}`;
+}
