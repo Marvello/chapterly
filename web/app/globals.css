@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Dark by default, light when the OS asks for it. Components use only these tokens. */
+:root {
+  --page: #0b1120; --component: #16202f; --edge: #1e293b;
+  --tprimary: #e2e8f0; --tsecondary: #cbd5e1; --tmuted: #94a3b8;
+  --accent: #2dd4bf; --good: #34d399; --warn: #f59e0b; --critical: #ef4444;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --page: #f8fafc; --component: #ffffff; --edge: #e2e8f0;
+    --tprimary: #0f172a; --tsecondary: #334155; --tmuted: #64748b;
+    --accent: #0d9488; --good: #059669; --warn: #b45309; --critical: #dc2626;
+  }
+}
+@theme inline {
+  --color-page: var(--page); --color-component: var(--component); --color-edge: var(--edge);
+  --color-tprimary: var(--tprimary); --color-tsecondary: var(--tsecondary); --color-tmuted: var(--tmuted);
+  --color-accent: var(--accent); --color-good: var(--good); --color-warn: var(--warn); --color-critical: var(--critical);
+}
+body { background: var(--page); color: var(--tsecondary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+input, select, textarea { outline: none; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }

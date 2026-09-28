@@ -4,3 +4,9 @@ data/
 library/
 .DS_Store
 .superpowers/
+web/node_modules/
+web/.next/
+web/.env*.local
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+.env
