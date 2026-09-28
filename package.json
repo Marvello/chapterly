@@ -1,5 +1,5 @@
 {
-  "name": "novel",
+  "name": "chapterly",
   "private": true,
   "description": "Web novel manager: worker (scraper + scheduler + CLI) and web UI sharing one SQLite DB",
   "scripts": {

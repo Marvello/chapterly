@@ -1,5 +1,5 @@
 {
-  "name": "novel-harness",
+  "name": "chapterly-worker",
   "version": "1.0.0",
   "description": "Run WebToEpub site parsers headless in Node",
   "main": "src/scraper.js",

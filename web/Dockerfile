@@ -11,8 +11,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning \
-    NOVEL_SHARED_DIR=/app/shared \
-    NOVEL_DB=/data/novel.db \
+    CHAPTERLY_SHARED_DIR=/app/shared \
+    CHAPTERLY_DB=/data/chapterly.db \
     PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=builder /build/web/.next/standalone ./
 COPY --from=builder /build/web/.next/static ./.next/static

@@ -1,29 +1,31 @@
+name: chapterly
+
 services:
   worker:
     build:
       context: .
       dockerfile: worker/Dockerfile
-    image: novel-harness
-    container_name: novel-worker
+    image: chapterly-worker
+    container_name: chapterly-worker
     restart: unless-stopped
     init: true   # forwards SIGTERM so `docker compose stop` is instant (chapters are saved as they arrive)
     # Must be able to write into the library; on Tower use Audiobookshelf's owner.
     user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-UTC}
-      NOVEL_MAX_ATTEMPTS: ${NOVEL_MAX_ATTEMPTS:-5}
-      # NOVEL_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
-      # NOVEL_RETRY_BASE_MIN: 60
+      CHAPTERLY_MAX_ATTEMPTS: ${CHAPTERLY_MAX_ATTEMPTS:-5}
+      # CHAPTERLY_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
+      # CHAPTERLY_RETRY_BASE_MIN: 60
     volumes:
-      - ${NOVEL_DATA_DIR:-novel-data}:/data
-      - ${NOVEL_LIBRARY_DIR:-./library}:/library
+      - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
+      - ${CHAPTERLY_LIBRARY_DIR:-./library}:/library
 
   web:
     build:
       context: .
       dockerfile: web/Dockerfile
-    image: novel-web
-    container_name: novel-web
+    image: chapterly-web
+    container_name: chapterly-web
     restart: unless-stopped
     init: true
     user: "${PUID:-1000}:${PGID:-1000}"
@@ -37,14 +39,15 @@ services:
       AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
       AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
       AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
-      NOVEL_MAX_ATTEMPTS: ${NOVEL_MAX_ATTEMPTS:-5}
+      CHAPTERLY_MAX_ATTEMPTS: ${CHAPTERLY_MAX_ATTEMPTS:-5}
     volumes:
-      - ${NOVEL_DATA_DIR:-novel-data}:/data
+      - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
     ports:
-      - "127.0.0.1:${NOVEL_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
+      - "127.0.0.1:${CHAPTERLY_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
 
 # SQLite (WAL) needs every process on one kernel. A named volume keeps the DB inside Docker's Linux
 # VM on Docker Desktop (Mac): no file-sharing layer between the two containers and no host access.
-# On a Linux host (Tower) NOVEL_DATA_DIR may point at a host path instead.
+# On a Linux host (Tower) CHAPTERLY_DATA_DIR may point at a host path instead.
 volumes:
-  novel-data:
+  chapterly-data:
+    name: chapterly-data   # fixed name: independent of the folder / project name

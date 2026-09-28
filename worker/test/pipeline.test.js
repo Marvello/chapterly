@@ -11,7 +11,7 @@ const { checkNovel, isDue, nextRetryAt, syncSupportedSites } = require("../src/w
 const { mockSite, BASE } = require("./mockSite");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-test-"));
-process.env.NOVEL_LIBRARY = path.join(tmp, "library");
+process.env.CHAPTERLY_LIBRARY = path.join(tmp, "library");
 
 // Chapter file names inside the zip (each appears in the local header and the central directory).
 const epubChapters = buf => new Set(buf.toString("latin1").match(/OEBPS\/Text\/\d{4}_[\w.-]+?\.xhtml/g));
@@ -19,7 +19,7 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
 
 (async () => {
     const site = mockSite(5);
-    const db = openDb(path.join(tmp, "novel.db"));
+    const db = openDb(path.join(tmp, "chapterly.db"));
     const s = createScraper({ fetch: site.fetch });
     const quiet = () => {};
     const id = db.addNovel(BASE).id;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readAuthConfig } from "./authConfig";
 
 const base = { AUTH_SECRET: "s" };
-const oidc = { AUTH_OIDC_ISSUER: "https://auth.example/application/o/novel/", AUTH_OIDC_ID: "id", AUTH_OIDC_SECRET: "sec" };
+const oidc = { AUTH_OIDC_ISSUER: "https://auth.example/application/o/chapterly/", AUTH_OIDC_ID: "id", AUTH_OIDC_SECRET: "sec" };
 
 describe("readAuthConfig", () => {
   it("local: password only when no OIDC env", () => {

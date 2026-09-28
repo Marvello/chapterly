@@ -12,7 +12,7 @@ const normEmail = e => String(e).trim().toLowerCase();
 const normHost = h => String(h).trim().toLowerCase().replace(/^www\./, "");
 const CHAPTER_COLS = "id, idx, url, title, fetched_at, error, attempts, retry_at, (html IS NOT NULL) AS fetched";
 
-function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data", "novel.db")) {
+function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "data", "chapterly.db")) {
     if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
     const db = new DatabaseSync(file);
     // busy_timeout first: switching to WAL takes a lock, and a second process starting at the same

@@ -14,8 +14,8 @@
 //   node cli.js info    <tocUrl>                 metadata + chapter list (JSON)
 //   node cli.js chapter <tocUrl> [n]             fetch chapter n (default 1) and print cleaned HTML
 //   node cli.js check   <tocUrl> <known.json>    list chapters not in known.json (a saved `info` output)
-// Env: NOVEL_DB (default data/novel.db), NOVEL_LIBRARY (default library/), NOVEL_COOKIE, NOVEL_UA,
-//      NOVEL_MAX_ATTEMPTS (5), NOVEL_RETRY_BASE_MIN (60: chapter retry backoff 1h, 2h, 4h, 8h)
+// Env: CHAPTERLY_DB (default data/chapterly.db), CHAPTERLY_LIBRARY (default library/), CHAPTERLY_COOKIE, CHAPTERLY_UA,
+//      CHAPTERLY_MAX_ATTEMPTS (5), CHAPTERLY_RETRY_BASE_MIN (60: chapter retry backoff 1h, 2h, 4h, 8h)
 "use strict";
 const fs = require("fs");
 const { createScraper } = require("./src/scraper");
@@ -32,8 +32,8 @@ const usage = () => fs.readFileSync(__filename, "utf8").split("\n").slice(1, 18)
 function scraper() {
     const s = createScraper({
         headers: {
-            ...(process.env.NOVEL_COOKIE && { Cookie: process.env.NOVEL_COOKIE }),
-            ...(process.env.NOVEL_UA && { "User-Agent": process.env.NOVEL_UA }),
+            ...(process.env.CHAPTERLY_COOKIE && { Cookie: process.env.CHAPTERLY_COOKIE }),
+            ...(process.env.CHAPTERLY_UA && { "User-Agent": process.env.CHAPTERLY_UA }),
         },
     });
     if (s.loadFailures.length) console.error("WebToEpub files that failed to load:", s.loadFailures);

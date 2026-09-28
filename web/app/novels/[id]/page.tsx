@@ -28,7 +28,7 @@ export default async function NovelPage({ params, searchParams }:
   const page = Math.min(pages, parseId((await searchParams).page ?? "1") ?? 1);
   const chapters = db.chapterPage(n.id, PAGE_SIZE, (page - 1) * PAGE_SIZE);
   const failing = db.failingChapters(n.id);
-  const maxAttempts = Number(process.env.NOVEL_MAX_ATTEMPTS || 5);
+  const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
   const nextCheck = n.last_checked_at
     ? new Date(Date.parse(n.last_checked_at) + n.check_interval_min * 60_000).toISOString() : null;

@@ -14,8 +14,8 @@ COPY shared /app/shared
 
 ENV NODE_ENV=production \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning \
-    NOVEL_DB=/data/novel.db \
-    NOVEL_LIBRARY=/library
+    CHAPTERLY_DB=/data/chapterly.db \
+    CHAPTERLY_LIBRARY=/library
 # Named volumes copy this dir's ownership on first use, so the node user (1000) can write the DB.
 RUN mkdir -p /data && chown node:node /data
 USER node

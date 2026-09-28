@@ -5,12 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const { diffChapters } = require("./diff");
 
-const LIBRARY = () => process.env.NOVEL_LIBRARY || path.join(__dirname, "..", "..", "library");
+const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
 // (1h, 2h, 4h, 8h by default); after MAX_ATTEMPTS failures stop until `cli.js retry <id>`.
 const retryPolicy = () => ({
-    maxAttempts: Number(process.env.NOVEL_MAX_ATTEMPTS || 5),
-    retryBaseMin: Number(process.env.NOVEL_RETRY_BASE_MIN || 60),
+    maxAttempts: Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5),
+    retryBaseMin: Number(process.env.CHAPTERLY_RETRY_BASE_MIN || 60),
 });
 const nextRetryAt = (attempts, baseMin, at = Date.now()) =>
     new Date(at + baseMin * 60_000 * 2 ** (attempts - 1)).toISOString();
@@ -113,7 +113,7 @@ function syncSupportedSites(db, scraper) {
 }
 
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
-async function runLoop(db, scraper, { tickMin = Number(process.env.NOVEL_TICK_MIN || 1), log = console.log } = {}) {
+async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TICK_MIN || 1), log = console.log } = {}) {
     syncSupportedSites(db, scraper);
     log(`worker started: checking due novels every ${tickMin} min`);
     for (;;) {

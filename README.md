@@ -1,4 +1,4 @@
-# novel-harness
+# Chapterly
 
 Self-hosted manager for the web novels I follow: add a novel by its table-of-contents URL, a
 worker checks it daily and fetches only new chapters, and the EPUB is regenerated into the
@@ -29,12 +29,12 @@ Re-run `worker/setup.sh` to pull upstream parser fixes. CLI commands below run f
     docker compose build --no-cache && docker compose up -d       # pull WebToEpub parser fixes
 
 The web UI never scrapes: add / check now / retry / interval / pause / delete are written to the DB and
-the worker picks them up within `NOVEL_TICK_MIN` (1 min). The SQLite DB lives in the `novel-data`
-Docker volume (shared by both containers) and the EPUBs in `./library`. Override with `NOVEL_DATA_DIR`,
-`NOVEL_LIBRARY_DIR` (point this at the Audiobookshelf library) and `PUID`/`PGID` (the user that owns
+the worker picks them up within `CHAPTERLY_TICK_MIN` (1 min). The SQLite DB lives in the `chapterly-data`
+Docker volume (shared by both containers) and the EPUBs in `./library`. Override with `CHAPTERLY_DATA_DIR`,
+`CHAPTERLY_LIBRARY_DIR` (point this at the Audiobookshelf library) and `PUID`/`PGID` (the user that owns
 that library, default 1000) in `.env`. **Don't open the DB from the host while the containers run on
 Docker Desktop** (SQLite WAL across the Mac/VM boundary can corrupt reads); use
-`docker compose exec worker node cli.js list` instead. On a Linux host a host path for `NOVEL_DATA_DIR`
+`docker compose exec worker node cli.js list` instead. On a Linux host a host path for `CHAPTERLY_DATA_DIR`
 is fine. Change the password with `cli.js user:password <email>` (logs out every session). The web port
 is bound to 127.0.0.1 only. Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
@@ -46,8 +46,8 @@ stops the web container at startup. authentik setup:
 1. Applications → Providers → **OAuth2/OpenID Provider**: client type *Confidential*, redirect URI
    `https://<novel host>/api/auth/callback/oidc`, signing key set (RS256), scopes `openid email profile`.
    The `email` scope mapping must return `email_verified: true` for your user (the app refuses unverified emails).
-2. Applications → **Application** "novel" using that provider; slug `novel` → issuer
-   `https://auth.<domain>/application/o/novel/`. Bind it to your user/group only.
+2. Applications → **Application** "chapterly" using that provider; slug `chapterly` → issuer
+   `https://auth.<domain>/application/o/chapterly/`. Bind it to your user/group only.
 3. First sign-in links your authentik identity to the account with the same email; afterwards only that
    identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
@@ -60,19 +60,19 @@ stops the web container at startup. authentik setup:
     node cli.js retry  <id>                                    # retry chapters that gave up
     npm run worker                                             # run forever (from worker/)
 
-- **Storage:** SQLite at `NOVEL_DB` (default `data/novel.db` at the repo root), via built-in `node:sqlite` (Node 24).
+- **Storage:** SQLite at `CHAPTERLY_DB` (default `data/chapterly.db` at the repo root), via built-in `node:sqlite` (Node 24).
   All SQL lives in `shared/db.js`; migrations are numbered files in `shared/migrations/`. Postgres later =
   rewrite `db.js`, callers unchanged.
-- **Worker:** wakes every `NOVEL_TICK_MIN` (default 1) and checks each active novel that was asked to "check now" or whose last
+- **Worker:** wakes every `CHAPTERLY_TICK_MIN` (default 1) and checks each active novel that was asked to "check now" or whose last
   check started ≥ `check_interval_min` (default 1440 = once a day) ago, one novel at a time. New chapters are
   fetched one by one with the parser's throttle and saved as they arrive, so a crash loses nothing.
   A failed chapter stays pending and is retried with exponential backoff: after the nth failure it
-  waits `NOVEL_RETRY_BASE_MIN × 2^(n-1)` (default 1h, 2h, 4h, 8h); after `NOVEL_MAX_ATTEMPTS` (5)
+  waits `CHAPTERLY_RETRY_BASE_MIN × 2^(n-1)` (default 1h, 2h, 4h, 8h); after `CHAPTERLY_MAX_ATTEMPTS` (5)
   it stops and `list` shows the error. `node cli.js retry <id>` resets it. Retries only happen
   during a check, so with daily checks a failing chapter is retried at most once a day. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.)
 - **EPUB:** packed by WebToEpub's own `EpubPacker` (EPUB 3 + toc.ncx, cover embedded), written to
-  `NOVEL_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
+  `CHAPTERLY_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
   path is fixed on first build, so Audiobookshelf keeps it as one item.
 - `node:sqlite` prints an ExperimentalWarning on Node 24; `npm --prefix worker run worker` hides it, or set
   `NODE_OPTIONS=--disable-warning=ExperimentalWarning`.
@@ -85,7 +85,7 @@ stops the web container at startup. authentik setup:
 
 Requests go through `worker/src/browserFetch.js` (got-scraping: Chrome-like TLS + headers), which passes
 Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, set
-`NOVEL_COOKIE="cf_clearance=..."` plus `NOVEL_UA` (that browser's exact User-Agent).
+`CHAPTERLY_COOKIE="cf_clearance=..."` plus `CHAPTERLY_UA` (that browser's exact User-Agent).
 
 ## API
     const { createScraper } = require("./worker/src/scraper");
@@ -128,7 +128,7 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 
 ## Next
 1. **Deploy to Tower:** same `compose.yaml` (verified locally), with `.env` pointing
-   `NOVEL_LIBRARY_DIR` at the Audiobookshelf library and `PUID`/`PGID` at its owner.
+   `CHAPTERLY_LIBRARY_DIR` at the Audiobookshelf library and `PUID`/`PGID` at its owner.
 2. **Tower web deploy:** `web` behind Cloudflare Tunnel + Access, with authentik OIDC verified live.
 3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.
