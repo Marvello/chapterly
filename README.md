@@ -23,10 +23,13 @@ Re-run `./setup.sh` to pull upstream parser fixes.
     docker compose build --no-cache && docker compose up -d       # pull WebToEpub parser fixes
 
 The web UI never scrapes: add / check now / retry / interval / pause / delete are written to the DB and
-the worker picks them up within `NOVEL_TICK_MIN` (1 min). `./data` holds the SQLite DB (shared by both
-containers) and `./library` the EPUBs. Override with `NOVEL_DATA_DIR`, `NOVEL_LIBRARY_DIR` (point this
-at the Audiobookshelf library) and `PUID`/`PGID` (the user that owns that library, default 1000) in
-`.env`. Change the password with `cli.js user:password <email>` (logs out every session). The web port
+the worker picks them up within `NOVEL_TICK_MIN` (1 min). The SQLite DB lives in the `novel-data`
+Docker volume (shared by both containers) and the EPUBs in `./library`. Override with `NOVEL_DATA_DIR`,
+`NOVEL_LIBRARY_DIR` (point this at the Audiobookshelf library) and `PUID`/`PGID` (the user that owns
+that library, default 1000) in `.env`. **Don't open the DB from the host while the containers run on
+Docker Desktop** (SQLite WAL across the Mac/VM boundary can corrupt reads); use
+`docker compose exec worker node cli.js list` instead. On a Linux host a host path for `NOVEL_DATA_DIR`
+is fine. Change the password with `cli.js user:password <email>` (logs out every session). The web port
 is bound to 127.0.0.1 only. Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
 ### Login: password locally, authentik on Tower

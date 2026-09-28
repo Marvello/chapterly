@@ -20,6 +20,8 @@ COPY --from=builder /build/web/public ./public
 # Shared DB module + migrations (the only SQL lives in src/db.js)
 COPY src/db.js novel/src/db.js
 COPY db/migrations novel/db/migrations
+# Named volumes copy this dir's ownership on first use, so the node user (1000) can write the DB.
+RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]
