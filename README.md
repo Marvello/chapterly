@@ -89,6 +89,9 @@ the https hostname.
   it stops and `list` shows the error. `node cli.js retry <id>` resets it. Retries only happen
   during a check, so with daily checks a failing chapter is retried at most once a day. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.)
+- **Restarts:** on startup the worker resumes any check it was stopped in the middle of (restart,
+  redeploy, crash) right away instead of after the novel's interval, fetching only the chapters it hadn't
+  saved. "Check now" requests (these, or the UI button) run before routine scheduled checks.
 - **Story status:** each novel is ongoing / completed / dropped — read from the site's `og:novel:status`
   tag on every check, unless you set it yourself (novel page or `cli.js series <id> <status>`), after
   which the site never overrides it. Completed + every chapter fetched → no more scheduled checks

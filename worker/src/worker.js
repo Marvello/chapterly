@@ -121,9 +121,18 @@ function isDue(n, at = Date.now()) {
 
 /** Check every due novel, one at a time (so at most one request per site at once). */
 async function checkDue(db, scraper, log = console.log, opts = {}) {
-    for (const n of db.listNovels().filter(n => isDue(n))) {
+    // "Check now" (from the UI or a resumed interrupted check) goes before routine scheduled checks.
+    const due = db.listNovels().filter(n => isDue(n))
+        .sort((a, b) => Number(!!b.check_requested_at) - Number(!!a.check_requested_at));
+    for (const n of due) {
         await checkNovel(db, scraper, n, log, opts);
     }
+}
+
+/** On startup: resume checks the worker was stopped in the middle of (restart, redeploy, crash). */
+function resumeInterruptedChecks(db, log = console.log) {
+    const n = db.requestInterruptedChecks();
+    if (n) log(`resuming ${n} interrupted check(s)`);
 }
 
 /** Publish the hostnames WebToEpub has a dedicated parser for, so the web form can validate URLs. */
@@ -134,6 +143,7 @@ function syncSupportedSites(db, scraper) {
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
 async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TICK_MIN || 1), log = console.log } = {}) {
     syncSupportedSites(db, scraper);
+    resumeInterruptedChecks(db, log);
     // Throws on a partial CHAPTERLY_ABS_* config, so a typo stops the worker instead of silently skipping rescans.
     const onEpubWritten = createAbsNotifier(absConfigFromEnv(process.env), log) ?? undefined;
     if (onEpubWritten) log("Audiobookshelf rescans enabled");
@@ -144,4 +154,4 @@ async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TIC
     }
 }
 
-module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt, syncSupportedSites };
+module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt, syncSupportedSites, resumeInterruptedChecks };

@@ -43,6 +43,10 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                    COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
             GROUP BY n.id ORDER BY n.id`, newSince),
+        /** Active novels whose last check started but never finished (worker stopped mid-check) → "check now". */
+        requestInterruptedChecks: () => Number(run(`UPDATE novels SET check_requested_at = ?
+            WHERE status = 'active' AND check_requested_at IS NULL AND last_checked_at IS NOT NULL
+              AND last_checked_at > COALESCE(check_finished_at, '')`, now()).changes),
         requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
         /** Your choice: from now on the site's status never overrides it. */
         setSeriesStatus: (id, status) =>

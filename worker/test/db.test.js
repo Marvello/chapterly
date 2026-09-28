@@ -110,6 +110,20 @@ const fresh = name => path.join(tmp, name);
     assert.throws(() => ss.setSeriesStatus(sn.id, "paused"), /CHECK/);
     ss.close();
 
+    // ---- interrupted checks (started, never finished) get a "check now" on worker start ----
+    const ir = openDb(fresh("interrupted.db"));
+    const cut = ir.addNovel("https://example.com/novel/cut").id;        // started, never finished
+    const fine = ir.addNovel("https://example.com/novel/fine").id;      // finished normally
+    const paused = ir.addNovel("https://example.com/novel/paused").id;  // interrupted but paused
+    const fresh1 = ir.addNovel("https://example.com/novel/new").id;     // never checked
+    for (const x of [cut, fine, paused]) ir.markCheckStarted(x);
+    ir.markCheckDone(fine, null);
+    ir.setStatus(paused, "paused");
+    assert.strictEqual(ir.requestInterruptedChecks(), 1);
+    assert.ok(ir.getNovel(cut).check_requested_at);
+    for (const x of [fine, paused, fresh1]) assert.strictEqual(ir.getNovel(x).check_requested_at, null);
+    ir.close();
+
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----
     const sdb = openDb(fresh("sites.db"));
     assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), null, "unknown until the worker fills the list");

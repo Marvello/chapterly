@@ -7,7 +7,7 @@ const os = require("os");
 const path = require("path");
 const { createScraper } = require("../src/scraper");
 const { openDb } = require("../../shared/db");
-const { checkNovel, isDue, nextRetryAt, syncSupportedSites } = require("../src/worker");
+const { checkNovel, checkDue, isDue, nextRetryAt, resumeInterruptedChecks, syncSupportedSites } = require("../src/worker");
 const { mockSite, BASE } = require("./mockSite");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-test-"));
@@ -133,6 +133,28 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     const bare = db.addNovel(`${BASE}?empty`); // distinct toc_url; served as the 0-chapter site
     await checkNovel(db, createScraper({ fetch: url => empty.fetch(String(url).replace("?empty", "")) }), bare, quiet);
     assert.match(db.getNovel(bare.id).last_error, /No chapters found/);
+
+    // Worker restarted mid-download: the interrupted novel is resumed right away (not after its interval),
+    // fetching only the chapters it didn't get, and requested novels run before merely-due ones.
+    const big2 = mockSite(6);
+    const cutScraper = createScraper({ fetch: url => big2.fetch(String(url).replace(/\?(cut|due)/, "")) });
+    db.addNovel(`${BASE}?due`);          // older (lower id) and due, but not requested: must still go second
+    const cutId = db.addNovel(`${BASE}?cut`).id;
+    const toc = await cutScraper.getNovel(`${BASE}?cut`);          // state a crash after 2 chapters leaves:
+    db.updateNovelMeta(cutId, toc);                                  // chapter list stored, 2 of 6 saved,
+    db.addChapters(cutId, toc.chapters);                             // check started but never finished
+    for (const c of db.chapters(cutId).slice(0, 2)) db.saveChapter(c.id, "<p>saved before the crash</p>");
+    db.markCheckStarted(cutId);
+    assert.ok(!isDue(db.listNovels().find(r => r.id === cutId)), "without a resume it would wait a full interval");
+
+    const order = [];
+    const recording = { ...cutScraper, getNovel: async url => { order.push(url); return cutScraper.getNovel(url); } };
+    resumeInterruptedChecks(db, quiet);
+    await checkDue(db, recording, quiet);
+    assert.deepStrictEqual(order.slice(0, 2), [`${BASE}?cut`, `${BASE}?due`], "resumed novel goes first");
+    const cutChapters = db.chapters(cutId);
+    assert.strictEqual(cutChapters.filter(c => c.html).length, 6, "all chapters present after resume");
+    assert.strictEqual(cutChapters.filter(c => c.html === "<p>saved before the crash</p>").length, 2, "saved chapters not refetched");
 
     // The worker publishes the supported hostnames for the web form.
     syncSupportedSites(db, s);
