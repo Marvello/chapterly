@@ -99,13 +99,20 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     // Backoff doubles per attempt: 1h, 2h, 4h, 8h.
     assert.deepStrictEqual([1, 2, 3, 4].map(a => (Date.parse(nextRetryAt(a, 60, 0))) / 3_600_000), [1, 2, 4, 8]);
 
-    // Scheduling: due once check_interval_min has passed since the last check started; never when paused.
+    // Scheduling: due when requested, never checked, or interval passed since the last start; never when paused.
     const t = Date.now(), ago = min => new Date(t - min * 60_000).toISOString();
-    const due = { status: "active", check_interval_min: 60 };
+    const due = { status: "active", check_interval_min: 60, check_requested_at: null };
     assert.ok(isDue({ ...due, last_checked_at: null }, t));
     assert.ok(!isDue({ ...due, last_checked_at: ago(59) }, t));
     assert.ok(isDue({ ...due, last_checked_at: ago(60) }, t));
-    assert.ok(!isDue({ ...due, status: "paused", last_checked_at: null }, t));
+    assert.ok(isDue({ ...due, last_checked_at: ago(1), check_requested_at: ago(0) }, t), "check now");
+    assert.ok(!isDue({ ...due, status: "paused", last_checked_at: null, check_requested_at: ago(0) }, t));
+
+    // A novel deleted from the UI before/while the worker checks it: no throw, nothing rebuilt.
+    const doomed = db.addNovel(`${BASE}?deleted`);
+    db.deleteNovel(doomed.id);
+    await checkNovel(db, s, doomed, quiet);
+    assert.strictEqual(db.getNovel(doomed.id), undefined);
 
     db.close();
     fs.rmSync(tmp, { recursive: true, force: true });

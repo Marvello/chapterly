@@ -25,7 +25,7 @@ Re-run `./setup.sh` to pull upstream parser fixes.
 `./data` holds the SQLite DB and `./library` the EPUBs. Override with `NOVEL_DATA_DIR`,
 `NOVEL_LIBRARY_DIR` (point this at the Audiobookshelf library), and `PUID`/`PGID` (the user that
 owns that library, default 1000) in a `.env` next to `compose.yaml`. A newly added novel is
-fetched at the worker's next tick (≤ 5 min), or right away with `docker compose restart worker`.
+fetched at the worker's next tick (≤ 1 min).
 
 ## Novel manager (CLI)
     node cli.js add    https://freewebnovel.com/novel/<slug>   # fetch TOC, store novel + chapter list
@@ -39,7 +39,7 @@ fetched at the worker's next tick (≤ 5 min), or right away with `docker compos
 - **Storage:** SQLite at `NOVEL_DB` (default `data/novel.db`), via built-in `node:sqlite` (Node 24).
   All SQL lives in `src/db.js`; migrations are numbered files in `migrations/`. Postgres later =
   rewrite `db.js`, callers unchanged.
-- **Worker:** wakes every `NOVEL_TICK_MIN` (default 5) and checks each active novel whose last
+- **Worker:** wakes every `NOVEL_TICK_MIN` (default 1) and checks each active novel that was asked to "check now" or whose last
   check started ≥ `check_interval_min` (default 1440 = once a day) ago, one novel at a time. New chapters are
   fetched one by one with the parser's throttle and saved as they arrive, so a crash loses nothing.
   A failed chapter stays pending and is retried with exponential backoff: after the nth failure it

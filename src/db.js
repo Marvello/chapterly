@@ -8,6 +8,8 @@ const { DatabaseSync } = require("node:sqlite");
 
 const MIGRATIONS_DIR = path.join(__dirname, "..", "db", "migrations");
 const now = () => new Date().toISOString();
+const normEmail = e => String(e).trim().toLowerCase();
+const CHAPTER_COLS = "id, idx, url, title, fetched_at, error, attempts, retry_at, (html IS NOT NULL) AS fetched";
 
 function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data", "novel.db")) {
     if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -30,11 +32,16 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
             return one("SELECT * FROM novels WHERE toc_url = ?", tocUrl);
         },
         getNovel: id => one("SELECT * FROM novels WHERE id = ?", id),
-        listNovels: () => all(`
+        findNovelByUrl: url => one("SELECT * FROM novels WHERE toc_url = ?", url),
+        /** @param newSince ISO time; chapters fetched at/after it count as "new". */
+        listNovels: (newSince = now()) => all(`
             SELECT n.*, COUNT(c.id) AS chapters_total, COUNT(c.html) AS chapters_fetched,
-                   SUM(CASE WHEN c.html IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END) AS chapters_failing
+                   COALESCE(SUM(CASE WHEN c.html IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END), 0) AS chapters_failing,
+                   COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
-            GROUP BY n.id ORDER BY n.id`),
+            GROUP BY n.id ORDER BY n.id`, newSince),
+        requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
+        setCheckInterval: (id, minutes) => run("UPDATE novels SET check_interval_min = ? WHERE id = ?", minutes, id),
         setStatus: (id, status) => run("UPDATE novels SET status = ? WHERE id = ?", status, id),
         deleteNovel: id => run("DELETE FROM novels WHERE id = ?", id),
 
@@ -43,11 +50,12 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
                  description = ?, cover_url = ? WHERE id = ?`,
                 m.parser, m.title, m.author, m.language, m.subjects, m.description, m.cover, id);
         },
-        /** Record the start of a check (so the next one is due `interval` after this start). */
-        markCheckStarted: id => run("UPDATE novels SET last_checked_at = ? WHERE id = ?", now(), id),
+        /** Record the start of a check (the next one is due `interval` after this start); consumes a "check now". */
+        markCheckStarted: id =>
+            run("UPDATE novels SET last_checked_at = ?, check_requested_at = NULL WHERE id = ?", now(), id),
         markCheckDone(id, error) {
-            if (error) run("UPDATE novels SET last_error = ? WHERE id = ?", error, id);
-            else run("UPDATE novels SET last_error = NULL, last_success_at = ? WHERE id = ?", now(), id);
+            if (error) run("UPDATE novels SET last_error = ?, check_finished_at = ? WHERE id = ?", error, now(), id);
+            else run("UPDATE novels SET last_error = NULL, last_success_at = ?, check_finished_at = ? WHERE id = ?", now(), now(), id);
         },
         markEpubBuilt: (id, epubPath) =>
             run("UPDATE novels SET epub_path = ?, epub_built_at = ? WHERE id = ?", epubPath, now(), id),
@@ -77,6 +85,33 @@ function openDb(file = process.env.NOVEL_DB || path.join(__dirname, "..", "data"
             run("UPDATE chapters SET html = ?, error = NULL, retry_at = NULL, fetched_at = ? WHERE id = ?", html, now(), id),
         failChapter: (id, error, retryAt) =>
             run("UPDATE chapters SET error = ?, attempts = attempts + 1, retry_at = ? WHERE id = ?", error, retryAt, id),
+        /** Chapter list page without html (novels can have thousands of chapters). Newest first. */
+        chapterPage: (novelId, limit, offset) =>
+            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? ORDER BY idx DESC, id DESC LIMIT ? OFFSET ?`,
+                novelId, limit, offset),
+        chapterCount: novelId => one("SELECT COUNT(*) AS n FROM chapters WHERE novel_id = ?", novelId).n,
+        failingChapters: novelId =>
+            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? AND html IS NULL AND attempts > 0 ORDER BY idx, id`,
+                novelId),
+
+        createUser({ email, name, passwordHash }) {
+            run("INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                normEmail(email), name ?? null, passwordHash, now());
+            return one("SELECT * FROM users WHERE email = ?", normEmail(email));
+        },
+        getUserByEmail: email => one("SELECT * FROM users WHERE email = ?", normEmail(email)),
+        getUserById: id => one("SELECT * FROM users WHERE id = ?", id),
+        getUserByOidcSub: sub => one("SELECT * FROM users WHERE oidc_sub = ?", sub),
+        /** New password: bumps session_version (logs out every existing session) and clears lockout. */
+        setPassword: (id, passwordHash) => run(`UPDATE users SET password_hash = ?, session_version = session_version + 1,
+            failed_logins = 0, locked_until = NULL WHERE id = ?`, passwordHash, id),
+        recordLoginFailure: (id, lockedUntil) =>
+            run("UPDATE users SET failed_logins = failed_logins + 1, locked_until = ? WHERE id = ?", lockedUntil, id),
+        recordLoginSuccess: id => run("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id),
+        /** Binds only if the user has no OIDC identity yet; returns rows changed (0 = refused). */
+        bindOidcSub: (id, sub) => Number(run("UPDATE users SET oidc_sub = ? WHERE id = ? AND oidc_sub IS NULL", sub, id).changes),
+        unlinkOidc: id => run("UPDATE users SET oidc_sub = NULL WHERE id = ?", id),
+
         /** True when chapters were fetched after the EPUB was last built (or it was never built). */
         epubStale(novelId) {
             const r = one(`SELECT n.epub_built_at AS built, MAX(c.fetched_at) AS latest

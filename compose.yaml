@@ -9,7 +9,7 @@ services:
     user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-UTC}
-      # NOVEL_TICK_MIN: 5          # how often the worker looks for due novels
+      # NOVEL_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
       # NOVEL_MAX_ATTEMPTS: 5
       # NOVEL_RETRY_BASE_MIN: 60
     volumes:

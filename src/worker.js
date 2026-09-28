@@ -88,8 +88,8 @@ async function buildEpub(db, scraper, id) {
     return file;
 }
 
-const isDue = (n, at = Date.now()) => n.status === "active" &&
-    (!n.last_checked_at || at - Date.parse(n.last_checked_at) >= n.check_interval_min * 60_000);
+const isDue = (n, at = Date.now()) => n.status === "active" && (!!n.check_requested_at || !n.last_checked_at ||
+    at - Date.parse(n.last_checked_at) >= n.check_interval_min * 60_000);
 
 /** Check every due novel, one at a time (so at most one request per site at once). */
 async function checkDue(db, scraper, log = console.log) {
@@ -99,7 +99,7 @@ async function checkDue(db, scraper, log = console.log) {
 }
 
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
-async function runLoop(db, scraper, { tickMin = Number(process.env.NOVEL_TICK_MIN || 5), log = console.log } = {}) {
+async function runLoop(db, scraper, { tickMin = Number(process.env.NOVEL_TICK_MIN || 1), log = console.log } = {}) {
     log(`worker started: checking due novels every ${tickMin} min`);
     for (;;) {
         await checkDue(db, scraper, log);
