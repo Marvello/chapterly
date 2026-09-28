@@ -38,6 +38,8 @@ function mockSite(chapterCount = 5) {
                 <div id="bg-ssp-123"><p>AD CONTENT</p></div>
                 <p>This story originates from somewhere else, ensure the author gets the support.</p>
                 <p>Synthetic <sub>junk</sub>paragraph two.</p>
+                <p>See <a href="https://example.org/glossary">the glossary</a>.</p>
+                <p><a href="/novel/test-story/chapter-${Number(m[1]) + 1}">Next chapter</a></p>
                 <script>tracking()</script>
               </div></body></html>`;
         }

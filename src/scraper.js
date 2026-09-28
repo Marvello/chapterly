@@ -72,6 +72,14 @@ function createScraper(opts = {}) {
         };
     }
 
+    // Like Parser.setPagesToFetch: the previous and next chapter URLs, so convertRawDomToContent
+    // strips "previous/next chapter" links from the content.
+    const normalizeUrl = run("(u) => util.normalizeUrlForCompare(u)", "normalizeUrl.js");
+    function neighbourUrls(chapters = [], chapterUrl) {
+        const i = chapters.findIndex(c => c.url === chapterUrl);
+        return new Set([chapters[i - 1], chapters[i + 1]].filter(c => i >= 0 && c).map(c => normalizeUrl(c.url)));
+    }
+
     async function getChapter(novelOrUrl, chapterUrl, { throttle = true } = {}) {
         errors.length = 0;
         let parser = novelOrUrl?._parser;
@@ -85,7 +93,8 @@ function createScraper(opts = {}) {
         if (parser.findContent(rawDom) == null) {
             throw new Error(`Content element not found on ${chapterUrl} (parser ${parser.constructor.name})`);
         }
-        const webPage = { sourceUrl: chapterUrl, rawDom, title: "[placeholder]", isIncludeable: true };
+        const webPage = { sourceUrl: chapterUrl, rawDom, title: "[placeholder]", isIncludeable: true,
+            nextPrevChapters: neighbourUrls(novelOrUrl?.chapters, chapterUrl) };
         const content = parser.convertRawDomToContent(webPage);
         return {
             url: chapterUrl,

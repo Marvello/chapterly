@@ -25,6 +25,9 @@ const { mockSite, BASE } = require("./mockSite");
     assert.ok(!ch.text.includes("originates from"), "watermark removed");
     assert.ok(!ch.text.includes("junk"), "<sub> junk removed");
     assert.ok(!ch.html.includes("<script"), "scripts removed");
+    // Links inside chapter text (regression: webPage.nextPrevChapters was missing → TypeError).
+    assert.ok(ch.text.includes("the glossary"), "ordinary links kept");
+    assert.ok(!ch.text.includes("Next chapter"), "link to the next chapter removed");
 
     // Sites without a dedicated parser use WebToEpub's DefaultParser, whose settings class lives in
     // DefaultParserUI.js; it must load headless (regression: "DefaultParserSiteSettings is not defined").
