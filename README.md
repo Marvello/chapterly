@@ -100,6 +100,11 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   EPUB gets). Images are left as absolute URLs for the EPUB builder to download.
 
 ## Limits
+- Only sites with a dedicated WebToEpub parser are supported. Other sites would fall back to
+  WebToEpub's DefaultParser, which needs per-site CSS configured in the extension's UI; headless it
+  would turn any page's links into junk chapters, so they are rejected ("No WebToEpub parser for this site").
+- Password login locks for up to 60 min after repeated failures, and anyone who can reach the login
+  page can trigger that. On Tower, authentik (OIDC) stays usable while it's locked.
 - Sites that render chapters with client-side JS, or sit behind interactive Cloudflare challenges (Turnstile),
   return empty/blocked HTML here too. Those need a Playwright fallback (next milestone).
 - `innerText` is approximated by `textContent` (jsdom has no layout); a few parsers that

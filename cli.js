@@ -87,6 +87,7 @@ function userByEmail(db, email) {
         const db = openDb(), s = scraper();
         const url = need(arg1, "<tocUrl>");
         const novel = await s.getNovel(url);
+        if (novel.usingDefaultParser) throw new Error(`No WebToEpub parser for this site (${new URL(url).hostname})`);
         if (!novel.chapters.length) throw new Error(`No chapters found at ${url} (parser ${novel.parser})`);
         const row = db.addNovel(url);
         db.updateNovelMeta(row.id, novel);

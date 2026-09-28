@@ -114,6 +114,31 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     await checkNovel(db, createScraper({ fetch: url => empty.fetch(String(url).replace("?empty", "")) }), bare, quiet);
     assert.match(db.getNovel(bare.id).last_error, /No chapters found/);
 
+    // Sites without a dedicated WebToEpub parser fall back to DefaultParser, which can't be configured
+    // headless and turns any page's links into junk "chapters": reject them as unsupported.
+    const generic = "https://unknown-site.example/story";
+    const genericFetch = async url => {
+        const ok = String(url) === generic;
+        const res = new Response(ok ? `<html><head><title>Blog</title></head><body><a href="${generic}/1">Post</a></body></html>` : "nf",
+            { status: ok ? 200 : 404, headers: { "content-type": "text/html" } });
+        Object.defineProperty(res, "url", { value: String(url) });
+        return res;
+    };
+    const blog = db.addNovel(generic);
+    await checkNovel(db, createScraper({ fetch: genericFetch }), blog, quiet);
+    assert.match(db.getNovel(blog.id).last_error, /No WebToEpub parser for this site/);
+    assert.deepStrictEqual(db.chapters(blog.id), [], "nothing stored for unsupported sites");
+
+    // Deleted (or paused) mid-check: stop fetching the remaining chapters right away.
+    const big = mockSite(6);
+    const long = db.addNovel(`${BASE}?long`);
+    const s6 = createScraper({ fetch: url => big.fetch(String(url).replace("?long", "")) });
+    let fetched = 0;
+    const deletingScraper = { ...s6, getChapter: async (...a) => { fetched++; const r = await s6.getChapter(...a);
+        if (fetched === 2) db.deleteNovel(long.id); return r; } };
+    await checkNovel(db, deletingScraper, long, quiet);
+    assert.strictEqual(fetched, 2, "no chapters fetched after the novel was deleted");
+
     // A novel deleted from the UI before/while the worker checks it: no throw, nothing rebuilt.
     const doomed = db.addNovel(`${BASE}?deleted`);
     db.deleteNovel(doomed.id);

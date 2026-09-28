@@ -86,8 +86,8 @@ Plan: `docs/superpowers/plans/2026-09-28-web-ui.md` · GIF: `novel-web-e2e.gif` 
    (`reason: locked`); after 1 min signs in — pass
 3. Add freewebnovel URL → "fetching info…" → title/cover → 79/79, "+79 new" (worker in container) — pass
 4. Same URL with spaces + upper-case host → opens existing novel, no duplicate — pass
-5. example.com → DefaultParser (sites without a dedicated parser) treats its links as a TOC → 1-chapter
-   "novel", **not** an error; a page with no chapters errors ("No chapters found", tested) — pass, see note
+5. example.com → first run showed DefaultParser turning its links into a 1-chapter junk "novel"; after the
+   final review, sites without a dedicated parser are rejected ("No WebToEpub parser for this site", tested)
 6. Check now → "checking…" → active; Pause hides Check now; Resume; interval persists — pass
 7. Chapter forced to gave-up → Problems panel "(5/5, gave up)" → Retry → refetched, panel gone — pass
 8. `cli.js user:password` → open browser logged out on next navigation, `stale_session_rejected` — pass
@@ -100,6 +100,7 @@ Bugs found and fixed during e2e (each with a failing test first):
 - DefaultParser crashed: `DefaultParserSiteSettings` lives in DefaultParserUI.js, which the loader skipped
 - Chapters containing links crashed (`webPage.nextPrevChapters` missing) — latent for every parser
 - 0-chapter TOC was a silent "0/0 active" novel → now an error
+- (final review) DefaultParser sites rejected as unsupported; a deleted/paused novel stops being fetched mid-check
 - Interval select showed the old value after saving (React 19 form reset) → `key={minutes}`
 - SQLite "database disk image is malformed" when the Mac host read `./data` while containers wrote →
   DB now in a named volume by default (WAL needs one kernel)

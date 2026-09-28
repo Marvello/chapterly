@@ -27,6 +27,9 @@ async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempt
     let error = null;
     try {
         const novel = await scraper.getNovel(novelRow.toc_url);
+        // DefaultParser needs per-site CSS set up in the extension's UI; headless it turns any page's
+        // links into junk "chapters". Only sites with a dedicated WebToEpub parser are supported.
+        if (novel.usingDefaultParser) throw new Error(`No WebToEpub parser for this site (${new URL(novelRow.toc_url).hostname})`);
         if (!novel.chapters.length) throw new Error(`No chapters found at ${novelRow.toc_url} (parser ${novel.parser})`);
         db.updateNovelMeta(id, novel);
         const { added } = diffChapters(db.chapters(id), novel.chapters);
@@ -36,6 +39,11 @@ async function checkNovel(db, scraper, novelRow, log = console.log, { maxAttempt
         if (added.length || pending.length) log(`[${id}] ${novel.title}: ${added.length} new, ${pending.length} to fetch`);
         let failed = 0;
         for (const [i, c] of pending.entries()) {
+            // Deleted or paused from the UI mid-check: stop now instead of fetching the rest.
+            if (db.getNovel(id)?.status !== "active") {
+                log(`[${id}] deleted or paused, stopping this check`);
+                break;
+            }
             try {
                 const ch = await scraper.getChapter(novel, c.url);
                 db.saveChapter(c.id, ch.html);
