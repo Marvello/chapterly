@@ -1,4 +1,4 @@
-# Chapterly
+# <img src="web/app/icon.svg" width="32" height="32" alt="" align="top"> Chapterly
 
 Self-hosted manager for the web novels I follow: add a novel by its table-of-contents URL, a
 worker checks it daily and fetches only new chapters, and the EPUB is regenerated into the
