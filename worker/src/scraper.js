@@ -125,13 +125,25 @@ function createScraper(opts = {}) {
             await parser.imageCollector.fetchImages(() => {}, meta.uuid);
             if (!parser.imageCollector.coverImageInfo?.arraybuffer) parser.imageCollector.reset();
         }
-        const items = chapters.map((c, i) => {
+        const packer = new EpubPacker(info, EpubPacker.EPUB_VERSION_3);
+        // Render each chapter's XHTML up front, one at a time, yielding to the event loop now and
+        // then. DOMPurify's per-node sanitize makes a jsdom NodeIterator that jsdom tracks with a
+        // WeakRef, and V8 keeps WeakRef targets (and their whole temp document) alive until the
+        // current task ends: packing thousands of chapters in one synchronous assemble() ran out
+        // of heap (4804 chapters > 4 GB). A timer tick releases them; a microtask does not.
+        const items = [];
+        for (const [i, c] of chapters.entries()) {
             const div = document.createElement("div");
             div.innerHTML = c.html;
-            return new ChapterEpubItem({ sourceUrl: c.url, title: c.title }, div, i);
-        });
+            const item = new ChapterEpubItem({ sourceUrl: c.url, title: c.title }, div, i);
+            const svg = item.hasSvg();   // reads the nodes, which rendering deletes
+            const xml = item.fileContentForEpub(packer.emptyDocFactory, packer.contentValidator);
+            Object.assign(item, { hasSvg: () => svg, fileContentForEpub: () => xml });
+            items.push(item);
+            if (i % 50 === 49) await new Promise(r => setTimeout(r));
+        }
         const supplier = new EpubItemSupplier(parser, items, parser.imageCollector);
-        return new EpubPacker(info, EpubPacker.EPUB_VERSION_3).assemble(supplier);
+        return packer.assemble(supplier);
     })`, "packEpub.js");
 
     /**
