@@ -152,7 +152,9 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   return empty/blocked HTML here too. Those need a Playwright fallback (next milestone).
 - `innerText` is approximated by `textContent` (jsdom has no layout); a few parsers that
   depend on rendered line breaks may produce slightly different whitespace.
-- WebToEpub is GPLv3: fine for personal use; if you distribute this, it must be GPLv3 too.
+- License: GPL-3.0-or-later (see `LICENSE`), because the worker runs WebToEpub (GPL-3.0-only) in-process.
+  WebToEpub isn't in this repo (fetched at setup / build); a published Docker image does include it,
+  with its own `LICENSE.md`.
 
 ## Rules
 - Keep `worker/vendor-WebToEpub/` unmodified; `worker/setup.sh` pulls upstream parser fixes. Patches go in
