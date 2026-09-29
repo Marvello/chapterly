@@ -167,5 +167,9 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 ## Next
 1. **Crash-loop guard:** a check that crashes the worker is resumed on every restart; stop resuming the
    same novel after a few consecutive crashes.
-2. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
+2. **Library search box:** filter by title / author as you type, once the library is too long to scan
+   (or to Cmd+F, which pagination would break).
+3. **Library pagination** (a couple of hundred novels+). The library query counts chapters per novel on
+   every load, so at that size also store the counts on the novel row; pagination alone won't fix that.
+4. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.

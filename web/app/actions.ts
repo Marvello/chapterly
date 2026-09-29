@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser, signOut } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { checkSupportedSite, parseId, parseInterval, parseNovelUrl, parseSeriesStatus } from "@/lib/validate";
+import { VIEW_COOKIE, libraryView } from "@/lib/view";
 
 export type AddState = { error?: string; ok?: boolean } | undefined;
 
@@ -65,6 +67,14 @@ export async function deleteAction(form: FormData) {
   let deleted = false;
   await withNovel(form, id => { getDb().deleteNovel(id); deleted = true; });
   if (deleted) redirect("/");
+}
+
+/** Library layout (overview / table / posters), remembered for a year. Unknown values → overview. */
+export async function setViewAction(form: FormData) {
+  await requireUser();
+  const view = libraryView(String(form.get("view") ?? ""));
+  (await cookies()).set(VIEW_COOKIE, view, { path: "/", maxAge: 31_536_000, sameSite: "lax", httpOnly: true });
+  revalidatePath("/");
 }
 
 export async function signOutAction() {

@@ -16,7 +16,18 @@ export function novelStatus(n: StatusFields): Status {
   return "active";
 }
 
-export const displayTitle = (n: Pick<NovelRow, "title" | "toc_url">) => n.title || n.toc_url;
+export const LIBRARY_VIEWS = ["overview", "table", "posters"] as const;
+export type LibraryView = (typeof LIBRARY_VIEWS)[number];
+export const VIEW_COOKIE = "library_view";
+/** Cookie value → view; anything unknown falls back to the overview cards. */
+export const libraryView = (v?: string): LibraryView =>
+  (LIBRARY_VIEWS as readonly string[]).includes(v ?? "") ? (v as LibraryView) : "overview";
+
+/** Share of chapters fetched, 0–100. */
+export const fetchedPct = (n: Pick<LibraryRow, "chapters_fetched" | "chapters_total">) =>
+  n.chapters_total ? Math.round((n.chapters_fetched / n.chapters_total) * 100) : 0;
+
+export const displayTitle =(n: Pick<NovelRow, "title" | "toc_url">) => n.title || n.toc_url;
 
 export function sortLibrary(rows: LibraryRow[]): LibraryRow[] {
   return [...rows].sort((a, b) =>

@@ -1,17 +1,17 @@
 /* eslint-disable @next/next/no-img-element -- covers are remote images from the novel's site */
 import Link from "next/link";
 import type { LibraryRow } from "@/lib/db";
-import { displayTitle, novelStatus, relativeTime } from "@/lib/view";
+import { displayTitle, fetchedPct, novelStatus, relativeTime } from "@/lib/view";
 import StatusBadge from "./StatusBadge";
 
 export default function NovelRow({ novel: n }: { novel: LibraryRow }) {
   const status = novelStatus(n);
-  const pct = n.chapters_total ? Math.round((n.chapters_fetched / n.chapters_total) * 100) : 0;
+  const pct = fetchedPct(n);
   return (
     <li>
       <Link href={`/novels/${n.id}`} className="flex gap-3 rounded-xl border border-edge bg-component p-3 hover:border-accent">
         {n.cover_url
-          ? <img src={n.cover_url} alt="" className="h-20 w-14 shrink-0 rounded object-cover" referrerPolicy="no-referrer" />
+          ? <img src={n.cover_url} alt="" className="h-20 w-14 shrink-0 rounded object-cover" loading="lazy" referrerPolicy="no-referrer" />
           : <div className="h-20 w-14 shrink-0 rounded bg-edge" />}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -19,6 +19,7 @@ export default function NovelRow({ novel: n }: { novel: LibraryRow }) {
             <StatusBadge status={status} />
           </div>
           {n.author && <p className="truncate text-sm text-tmuted">{n.author}</p>}
+          {n.description && <p className="mt-1 line-clamp-2 text-sm text-tsecondary">{n.description}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-tmuted">
             <span className="tabular-nums">{n.chapters_fetched}/{n.chapters_total} chapters</span>
             {n.chapters_new > 0 && <span className="rounded bg-accent px-1.5 font-medium text-page">+{n.chapters_new} new</span>}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { isSeriesDone, newSince, nextCheckAt, novelStatus, relativeTime, sortLibrary } from "./view";
+import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, novelStatus, relativeTime, sortLibrary } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -59,4 +59,17 @@ it("nextCheckAt mirrors the worker: interval after the last check, at least week
   expect(nextCheckAt({ ...base, series_status: "dropped" })).toBe("2026-01-08T00:00:00.000Z");
   expect(nextCheckAt({ ...base, series_status: "dropped", check_interval_min: 20160 })).toBe("2026-01-15T00:00:00.000Z");
   expect(nextCheckAt({ ...base, last_checked_at: null, series_status: "ongoing" })).toBeNull();
+});
+
+describe("libraryView / fetchedPct", () => {
+  it("unknown or missing cookie falls back to overview", () => {
+    expect(libraryView("table")).toBe("table");
+    expect(libraryView("posters")).toBe("posters");
+    expect(libraryView(undefined)).toBe("overview");
+    expect(libraryView("grid<script>")).toBe("overview");
+  });
+  it("fetched share, 0 when there are no chapters yet", () => {
+    expect(fetchedPct(row({ chapters_fetched: 1, chapters_total: 3 }))).toBe(33);
+    expect(fetchedPct(row({ chapters_fetched: 0, chapters_total: 0 }))).toBe(0);
+  });
 });
