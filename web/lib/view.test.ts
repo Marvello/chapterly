@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, novelStatus, relativeTime, sortLibrary } from "./view";
+import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
   description: null, cover_url: null, status: "active", check_interval_min: 1440, last_checked_at: null,
   last_success_at: null, last_error: null, epub_path: null, epub_built_at: null, created_at: "",
   check_requested_at: null, check_finished_at: null, series_status: "ongoing", series_status_manual: 0,
-  chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, ...o,
+  chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, last_fetched_at: null, ...o,
 });
 
 describe("novelStatus", () => {
@@ -71,5 +71,39 @@ describe("libraryView / fetchedPct", () => {
   it("fetched share, 0 when there are no chapters yet", () => {
     expect(fetchedPct(row({ chapters_fetched: 1, chapters_total: 3 }))).toBe(33);
     expect(fetchedPct(row({ chapters_fetched: 0, chapters_total: 0 }))).toBe(0);
+  });
+});
+
+describe("parseLibraryQuery / queryLibrary", () => {
+  const lib = [
+    row({ id: 1, title: "Beta", author: "Ann", chapters_total: 10, created_at: "2026-01-02", last_fetched_at: "2026-03-01" }),
+    row({ id: 2, title: "alpha", author: "Bob", chapters_total: 50, created_at: "2026-01-03", last_fetched_at: "2026-02-01", series_status: "completed" }),
+    row({ id: 3, title: "Gamma", chapters_total: 5, chapters_new: 2, created_at: "2026-01-01", last_error: "boom", check_finished_at: "x" }),
+    row({ id: 4, title: "Delta", status: "paused", series_status: "dropped" }),
+  ];
+  const ids = (sort: string, filter = "all", q = "") => queryLibrary(lib, parseLibraryQuery({ sort, filter, q })).map(n => n.id);
+
+  it("unknown params fall back to defaults; search is trimmed and capped", () => {
+    expect(parseLibraryQuery({ sort: "hack", filter: ["new"], q: "  x  " })).toEqual({ sort: "new", filter: "all", q: "x" });
+    expect(parseLibraryQuery({ sort: "toString" }).sort).toBe("new");
+    expect(parseLibraryQuery({ q: "y".repeat(500) }).q).toHaveLength(100);
+  });
+  it("sorts", () => {
+    expect(ids("new")).toEqual([3, 2, 1, 4]);
+    expect(ids("title")).toEqual([2, 1, 4, 3]);
+    expect(ids("updated")).toEqual([1, 2, 4, 3]);   // never fetched last, then by title
+    expect(ids("added")).toEqual([2, 1, 3, 4]);
+    expect(ids("chapters")).toEqual([2, 1, 3, 4]);
+    expect(sortLibrary(lib).map(n => n.id)).toEqual(ids("new"));
+  });
+  it("filters and searches title / author, case-insensitive", () => {
+    expect(ids("title", "new")).toEqual([3]);
+    expect(ids("title", "completed")).toEqual([2]);
+    expect(ids("title", "dropped")).toEqual([4]);
+    expect(ids("title", "error")).toEqual([3]);
+    expect(ids("title", "paused")).toEqual([4]);
+    expect(ids("title", "all", "ALP")).toEqual([2]);
+    expect(ids("title", "all", "ann")).toEqual([1]);
+    expect(ids("title", "ongoing", "zzz")).toEqual([]);
   });
 });

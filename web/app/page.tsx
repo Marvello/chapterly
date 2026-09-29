@@ -2,20 +2,23 @@ import { cookies } from "next/headers";
 import AddNovelForm from "@/components/AddNovelForm";
 import AutoRefresh from "@/components/AutoRefresh";
 import Header from "@/components/Header";
+import LibraryControls from "@/components/LibraryControls";
 import NovelPosters from "@/components/NovelPosters";
 import NovelRow from "@/components/NovelRow";
 import NovelTable from "@/components/NovelTable";
 import ViewToggle from "@/components/ViewToggle";
 import { getDb } from "@/lib/db";
-import { VIEW_COOKIE, libraryView, newSince, novelStatus, sortLibrary } from "@/lib/view";
+import { VIEW_COOKIE, libraryView, newSince, novelStatus, parseLibraryQuery, queryLibrary } from "@/lib/view";
 
 export const dynamic = "force-dynamic";
 
-export default async function LibraryPage() {
+export default async function LibraryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const view = libraryView((await cookies()).get(VIEW_COOKIE)?.value);
-  const novels = sortLibrary(getDb().listNovels(newSince()));
-  // Only while the worker is actually on it; gave-up chapters leave fetched < total forever.
-  const live = novels.some(n => ["fetching_info", "checking"].includes(novelStatus(n)));
+  const query = parseLibraryQuery(await searchParams);
+  const all = getDb().listNovels(newSince());
+  const novels = queryLibrary(all, query);
+  // Only while the worker is actually on it (any novel, shown or not); gave-up chapters leave fetched < total forever.
+  const live = all.some(n => ["fetching_info", "checking"].includes(novelStatus(n)));
   return (
     <main className="mx-auto max-w-6xl p-4">
       <AutoRefresh active={live} />
@@ -24,16 +27,20 @@ export default async function LibraryPage() {
         <Header />
         <AddNovelForm />
       </div>
-      {novels.length === 0
+      {all.length === 0
         ? <p className="text-tmuted">No novels yet. Paste a novel&apos;s table-of-contents URL above.</p>
         : <>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-sm text-tmuted">{novels.length} novel{novels.length === 1 ? "" : "s"}</span>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1"><LibraryControls query={query} /></div>
             <ViewToggle view={view} />
           </div>
-          {view === "table" ? <NovelTable novels={novels} />
-            : view === "posters" ? <NovelPosters novels={novels} />
-              : <ul className="space-y-3">{novels.map(n => <NovelRow key={n.id} novel={n} />)}</ul>}
+          <p className="mb-3 text-sm text-tmuted">
+            {novels.length === all.length ? `${all.length} novel${all.length === 1 ? "" : "s"}` : `${novels.length} of ${all.length} novels`}
+          </p>
+          {novels.length === 0 ? <p className="text-tmuted">No novels match.</p>
+            : view === "table" ? <NovelTable novels={novels} />
+              : view === "posters" ? <NovelPosters novels={novels} />
+                : <ul className="space-y-3">{novels.map(n => <NovelRow key={n.id} novel={n} />)}</ul>}
         </>}
     </main>
   );

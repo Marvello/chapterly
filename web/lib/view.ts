@@ -29,10 +29,65 @@ export const fetchedPct = (n: Pick<LibraryRow, "chapters_fetched" | "chapters_to
 
 export const displayTitle =(n: Pick<NovelRow, "title" | "toc_url">) => n.title || n.toc_url;
 
-export function sortLibrary(rows: LibraryRow[]): LibraryRow[] {
-  return [...rows].sort((a, b) =>
-    Number(b.chapters_new > 0) - Number(a.chapters_new > 0) ||
-    displayTitle(a).localeCompare(displayTitle(b), undefined, { sensitivity: "base" }));
+/** Default library order: novels with new chapters first, then by title. */
+export const sortLibrary = (rows: LibraryRow[]) => queryLibrary(rows, { sort: "new", filter: "all", q: "" });
+
+export const LIBRARY_SORTS = {
+  new: "New first",
+  title: "Title",
+  updated: "Recently updated",
+  added: "Recently added",
+  chapters: "Most chapters",
+} as const;
+export const LIBRARY_FILTERS = {
+  all: "All",
+  new: "Has new chapters",
+  ongoing: "Ongoing",
+  completed: "Completed",
+  dropped: "Dropped",
+  error: "Errors",
+  paused: "Paused",
+} as const;
+export type LibrarySort = keyof typeof LIBRARY_SORTS;
+export type LibraryFilter = keyof typeof LIBRARY_FILTERS;
+export interface LibraryQuery { sort: LibrarySort; filter: LibraryFilter; q: string }
+
+const pick = <T extends string>(options: Record<T, string>, v: unknown, fallback: T): T =>
+  typeof v === "string" && Object.hasOwn(options, v) ? (v as T) : fallback;
+
+/** URL search params → query; anything unknown falls back to the defaults (new first, all, no search). */
+export function parseLibraryQuery(p: Record<string, string | string[] | undefined>): LibraryQuery {
+  const q = typeof p.q === "string" ? p.q.trim().slice(0, 100) : "";
+  return { sort: pick(LIBRARY_SORTS, p.sort, "new"), filter: pick(LIBRARY_FILTERS, p.filter, "all"), q };
+}
+
+function matchesFilter(n: LibraryRow, f: LibraryFilter): boolean {
+  switch (f) {
+    case "all": return true;
+    case "new": return n.chapters_new > 0;
+    case "error": return novelStatus(n) === "error";
+    case "paused": return n.status === "paused";
+    default: return n.series_status === f;   // ongoing / completed / dropped
+  }
+}
+
+const byTitle = (a: LibraryRow, b: LibraryRow) =>
+  displayTitle(a).localeCompare(displayTitle(b), undefined, { sensitivity: "base" });
+const desc = (a: string | null, b: string | null) => (b ?? "").localeCompare(a ?? "");
+
+/** Filter, search (title / author, case-insensitive) and sort the library; ties fall back to title. */
+export function queryLibrary(rows: LibraryRow[], { sort, filter, q }: LibraryQuery): LibraryRow[] {
+  const needle = q.toLowerCase();
+  const kept = rows.filter(n => matchesFilter(n, filter) &&
+    (!needle || `${displayTitle(n)}\n${n.author ?? ""}`.toLowerCase().includes(needle)));
+  const cmp: Record<LibrarySort, (a: LibraryRow, b: LibraryRow) => number> = {
+    new: (a, b) => Number(b.chapters_new > 0) - Number(a.chapters_new > 0),
+    title: () => 0,
+    updated: (a, b) => desc(a.last_fetched_at, b.last_fetched_at),
+    added: (a, b) => desc(a.created_at, b.created_at),
+    chapters: (a, b) => b.chapters_total - a.chapters_total,
+  };
+  return [...kept].sort((a, b) => cmp[sort](a, b) || byTitle(a, b));
 }
 
 export function relativeTime(iso: string | null, now = Date.now()): string {

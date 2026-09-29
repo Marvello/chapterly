@@ -40,7 +40,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         listNovels: (newSince = now()) => all(`
             SELECT n.*, COUNT(c.id) AS chapters_total, COUNT(c.html) AS chapters_fetched,
                    COALESCE(SUM(CASE WHEN c.html IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END), 0) AS chapters_failing,
-                   COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new
+                   COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new,
+                   MAX(c.fetched_at) AS last_fetched_at
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
             GROUP BY n.id ORDER BY n.id`, newSince),
         /** Active novels whose last check started but never finished (worker stopped mid-check) → "check now". */

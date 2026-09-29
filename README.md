@@ -108,6 +108,10 @@ arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterl
   peak; packing them in one synchronous pass needed > 4 GB, because jsdom WeakRefs keep each sanitized
   temp document alive until the task ends). A site heading that repeats the chapter title (`<h2>` with the
   same "Chapter N" right under WebToEpub's `<h1>`, as on freewebnovel) is dropped at build time.
+- **Library (web UI):** Overview / Table / Posters (remembered in a cookie), plus search (title or
+  author), a filter (new chapters, ongoing / completed / dropped, errors, paused) and a sort (new first,
+  title, recently updated, recently added, most chapters). Search, filter and sort live in the URL
+  (`?q=&filter=&sort=`), so back/forward and bookmarks keep them.
 - **"+N new" badge (web UI):** chapters fetched in the last 24 h. It expires on its own; rebuilding an
   EPUB doesn't reset it.
 - `node:sqlite` prints an ExperimentalWarning on Node 24; `npm --prefix worker run worker` hides it, or set
@@ -167,9 +171,7 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
 ## Next
 1. **Crash-loop guard:** a check that crashes the worker is resumed on every restart; stop resuming the
    same novel after a few consecutive crashes.
-2. **Library search box:** filter by title / author as you type, once the library is too long to scan
-   (or to Cmd+F, which pagination would break).
-3. **Library pagination** (a couple of hundred novels+). The library query counts chapters per novel on
+2. **Library pagination** (a couple of hundred novels+). The library query counts chapters per novel on
    every load, so at that size also store the counts on the novel row; pagination alone won't fix that.
-4. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
+3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.

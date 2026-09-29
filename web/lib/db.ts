@@ -14,6 +14,7 @@ export interface NovelRow {
 }
 export interface LibraryRow extends NovelRow {
   chapters_total: number; chapters_fetched: number; chapters_failing: number; chapters_new: number;
+  last_fetched_at: string | null;
 }
 export interface ChapterRow {
   id: number; idx: number; url: string; title: string | null; fetched_at: string | null;
