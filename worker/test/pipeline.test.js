@@ -39,6 +39,19 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.match(epub.toString("latin1"), /OEBPS\/Images\/\S+?\.jpe?g/, "cover image embedded");
     assert.deepStrictEqual(fs.readdirSync(path.dirname(n.epub_path)), ["Test Story.epub"], "no temp file left behind");
 
+    // The site's repeated "Chapter N" <h2> under WebToEpub's <h1> is dropped; a real subtitle stays.
+    {
+        const { ZipReader, Uint8ArrayReader, TextWriter } = require("@zip.js/zip.js");
+        const buf = await s.buildEpub({ tocUrl: BASE, title: "Dup" }, [
+            { url: `${BASE}/chapter-1`, title: "Chapter 1: Scythe", html: "<h1>Chapter 1: Scythe</h1><h2>Chapter 1: Chapter 1: Scythe</h2><p>a</p>" },
+            { url: `${BASE}/chapter-2`, title: "Chapter 2: Rain", html: "<h1>Chapter 2: Rain</h1><h2>Part One</h2><p>b</p>" },
+        ]);
+        const entries = await new ZipReader(new Uint8ArrayReader(new Uint8Array(buf))).getEntries();
+        const xhtml = await Promise.all(entries.filter(e => /Text\/\d{4}_/.test(e.filename)).map(e => e.getData(new TextWriter())));
+        assert.ok(!/<h2/.test(xhtml[0]) && /<h1>Chapter 1: Scythe<\/h1>/.test(xhtml[0]), "duplicate chapter heading removed");
+        assert.match(xhtml[1], /<h2>Part One<\/h2>/, "real subtitle kept");
+    }
+
     // 2nd check, nothing new: no chapter fetches, EPUB not rebuilt, Audiobookshelf not asked to rescan.
     site.requests.length = 0;
     const builtAt = n.epub_built_at;

@@ -131,10 +131,14 @@ function createScraper(opts = {}) {
         // WeakRef, and V8 keeps WeakRef targets (and their whole temp document) alive until the
         // current task ends: packing thousands of chapters in one synchronous assemble() ran out
         // of heap (4804 chapters > 4 GB). A timer tick releases them; a microtask does not.
+        // Sites like freewebnovel repeat the chapter title as an <h2> right under WebToEpub's <h1>.
+        const chapterNo = el => /^\\s*chapter\\s*(\\d+)/i.exec(el?.textContent || "")?.[1];
         const items = [];
         for (const [i, c] of chapters.entries()) {
             const div = document.createElement("div");
             div.innerHTML = c.html;
+            const dup = div.querySelector(":scope > h1:first-child + h2");
+            if (dup && chapterNo(dup) && chapterNo(dup) === chapterNo(div.firstElementChild)) dup.remove();
             const item = new ChapterEpubItem({ sourceUrl: c.url, title: c.title }, div, i);
             const svg = item.hasSvg();   // reads the nodes, which rendering deletes
             const xml = item.fileContentForEpub(packer.emptyDocFactory, packer.contentValidator);
