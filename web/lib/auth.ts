@@ -11,7 +11,7 @@ import { checkSession } from "./session";
 
 const allowIp = createRateLimiter(10, 60_000); // security.md #17: 10 password attempts / min / IP
 
-/** Behind a Cloudflare tunnel/proxy the client IP is in cf-connecting-ip; the port is bound to 127.0.0.1. */
+/** Behind a Cloudflare tunnel/proxy the client IP is in cf-connecting-ip. */
 export function clientIp(h: Headers): string {
   return h.get("cf-connecting-ip") ?? h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
 }

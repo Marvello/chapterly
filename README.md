@@ -36,7 +36,7 @@ that library, default 1000) in `.env`. **Don't open the DB from the host while t
 Docker Desktop** (SQLite WAL across the Mac/VM boundary can corrupt reads); use
 `docker compose exec worker node cli.js list` instead. On a Linux host a host path for `CHAPTERLY_DATA_DIR`
 is fine. Change the password with `cli.js user:password <email>` (logs out every session). The web port
-is bound to 127.0.0.1 only. Every CLI command below also works via `docker compose exec worker node cli.js …`.
+listens on all host interfaces (see Deploy). Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
 ### Login: password and/or OIDC
 Controlled by env (see `.env.example`). With no `AUTH_OIDC_*` set, only the password form is shown.
@@ -60,8 +60,10 @@ from your machine, then pull and rebuild on the server:
 In the server's `.env`, point `CHAPTERLY_LIBRARY_DIR` at the Audiobookshelf library, `PUID`/`PGID` at
 its owner, and optionally set `CHAPTERLY_DATA_DIR` (a host path), `CHAPTERLY_WEB_PORT` and `AUTH_URL`
 (the URL you open the UI at). CLI commands: `docker exec -it chapterly-worker node cli.js …`.
-The web port is bound to 127.0.0.1: reach it through an SSH tunnel (`ssh -N -L <port>:127.0.0.1:<port>
-<server>`) or an authenticating tunnel / reverse proxy, with `AUTH_URL` set to that https URL.
+The web port listens on all of the host's interfaces, so it's reachable over the LAN or a private VPN.
+Keep it behind a firewall and never port-forward it to the internet; for public access put an
+authenticating tunnel / reverse proxy in front, with `AUTH_URL` set to that https URL. For localhost
+only, bind it as `127.0.0.1:${CHAPTERLY_WEB_PORT:-3000}:3000` in `compose.yaml`.
 
 A change to how EPUBs are packed only reaches existing books when they are next rebuilt (a new chapter
 arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterly-worker node cli.js build $i; done`.
