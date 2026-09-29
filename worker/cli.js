@@ -9,7 +9,7 @@
 //   node cli.js series  <id> ongoing|completed|dropped   mark the story's status (completed + fully fetched = no more checks)
 //   node cli.js user:create <email> [name]       create the login account (password prompted, hidden)
 //   node cli.js user:password <email>            change the password (logs out all sessions)
-//   node cli.js user:unlink-oidc <email>         forget the linked authentik identity
+//   node cli.js user:unlink-oidc <email>         forget the linked OIDC identity
 //   node cli.js worker                           run forever: check each novel once a day (check_interval_min, default 1440)
 //   node cli.js parser  <url>                    which WebToEpub parser handles the URL
 //   node cli.js info    <tocUrl>                 metadata + chapter list (JSON)

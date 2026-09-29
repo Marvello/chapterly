@@ -9,7 +9,7 @@ services:
     container_name: chapterly-worker
     restart: unless-stopped
     init: true   # forwards SIGTERM so `docker compose stop` is instant (chapters are saved as they arrive)
-    # Must be able to write into the library; on Tower use Audiobookshelf's owner.
+    # Must be able to write into the library; use Audiobookshelf's owner.
     user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-UTC}
@@ -21,7 +21,7 @@ services:
       # CHAPTERLY_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
       # CHAPTERLY_RETRY_BASE_MIN: 60
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # reach services published on the host (e.g. ABS :13378)
+      - "host.docker.internal:host-gateway"   # reach services published on the host (e.g. Audiobookshelf)
     volumes:
       - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
       - ${CHAPTERLY_LIBRARY_DIR:-./library}:/library
@@ -40,7 +40,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env (openssl rand -base64 32)}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       AUTH_PASSWORD_LOGIN: ${AUTH_PASSWORD_LOGIN:-true}
-      # OIDC (Tower only): set all three to enable "Sign in with authentik"
+      # Optional OIDC: set all three to add a "Sign in with <AUTH_OIDC_NAME>" button
       AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
       AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
       AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
@@ -49,11 +49,11 @@ services:
     volumes:
       - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
     ports:
-      - "${CHAPTERLY_WEB_PORT:-3000}:3000"   # never on the LAN; Cloudflare Tunnel points here on Tower
+      - "${CHAPTERLY_WEB_PORT:-3000}:3000"   # localhost only; reach it via an SSH tunnel or a tunnel / reverse proxy
 
 # SQLite (WAL) needs every process on one kernel. A named volume keeps the DB inside Docker's Linux
 # VM on Docker Desktop (Mac): no file-sharing layer between the two containers and no host access.
-# On a Linux host (Tower) CHAPTERLY_DATA_DIR may point at a host path instead.
+# On a Linux host CHAPTERLY_DATA_DIR may point at a host path instead.
 volumes:
   chapterly-data:
     name: chapterly-data   # fixed name: independent of the folder / project name

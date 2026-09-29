@@ -11,7 +11,7 @@ import { checkSession } from "./session";
 
 const allowIp = createRateLimiter(10, 60_000); // security.md #17: 10 password attempts / min / IP
 
-/** Behind Cloudflare Tunnel the client IP is in cf-connecting-ip; the port is bound to 127.0.0.1. */
+/** Behind a Cloudflare tunnel/proxy the client IP is in cf-connecting-ip; the port is bound to 127.0.0.1. */
 export function clientIp(h: Headers): string {
   return h.get("cf-connecting-ip") ?? h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
 }
@@ -43,7 +43,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth((): NextAuthConfig =
     trustHost: true,
     session: { strategy: "jwt" },
     pages: { signIn: "/login", error: "/login" },
-    useSecureCookies: (process.env.AUTH_URL ?? "").startsWith("https://"), // security.md #19 (Tower is https)
+    useSecureCookies: (process.env.AUTH_URL ?? "").startsWith("https://"), // security.md #19 (https deployments)
     callbacks: {
       signIn({ account, profile }) {
         if (account?.provider !== "oidc") return true;

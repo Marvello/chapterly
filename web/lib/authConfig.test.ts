@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readAuthConfig } from "./authConfig";
 
 const base = { AUTH_SECRET: "s" };
-const oidc = { AUTH_OIDC_ISSUER: "https://auth.example/application/o/chapterly/", AUTH_OIDC_ID: "id", AUTH_OIDC_SECRET: "sec" };
+const oidc = { AUTH_OIDC_ISSUER: "https://auth.example/", AUTH_OIDC_ID: "id", AUTH_OIDC_SECRET: "sec" };
 
 describe("readAuthConfig", () => {
   it("local: password only when no OIDC env", () => {
@@ -11,12 +11,12 @@ describe("readAuthConfig", () => {
   it("empty strings count as unset (compose passes ${VAR:-})", () => {
     expect(readAuthConfig({ ...base, AUTH_OIDC_ISSUER: "", AUTH_OIDC_ID: "", AUTH_OIDC_SECRET: "" }).oidc).toBeNull();
   });
-  it("tower: OIDC enabled when all three are set, default label authentik", () => {
+  it("OIDC enabled when all three are set, default label SSO", () => {
     expect(readAuthConfig({ ...base, ...oidc })).toEqual({
       passwordLogin: true,
-      oidc: { issuer: oidc.AUTH_OIDC_ISSUER, clientId: "id", clientSecret: "sec", name: "authentik" },
+      oidc: { issuer: oidc.AUTH_OIDC_ISSUER, clientId: "id", clientSecret: "sec", name: "SSO" },
     });
-    expect(readAuthConfig({ ...base, ...oidc, AUTH_OIDC_NAME: "SSO" }).oidc?.name).toBe("SSO");
+    expect(readAuthConfig({ ...base, ...oidc, AUTH_OIDC_NAME: "My IdP" }).oidc?.name).toBe("My IdP");
   });
   it("password login can be switched off only when OIDC is configured", () => {
     expect(readAuthConfig({ ...base, ...oidc, AUTH_PASSWORD_LOGIN: "false" }).passwordLogin).toBe(false);

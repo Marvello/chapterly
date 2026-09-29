@@ -6,8 +6,8 @@ worker checks it daily and fetches only new chapters, and the EPUB is regenerate
 [WebToEpub](https://github.com/dteviot/WebToEpub)'s 640+ site parsers, run headless in Node (jsdom),
 instead of writing our own. (FanFicFare supports updates but not freewebnovel, the main site here.)
 
-Target: Tower homelab (Docker, next to Audiobookshelf), Node 24, public access only via
-Cloudflare Tunnel + Access.
+Target: a self-hosted Docker host next to Audiobookshelf, Node 24. Don't expose the web UI directly;
+put it behind an authenticating tunnel or reverse proxy.
 
 ## Layout
     shared/     db.js (the only module with SQL) + migrations/ — used by both worker and web
@@ -38,36 +38,33 @@ Docker Desktop** (SQLite WAL across the Mac/VM boundary can corrupt reads); use
 is fine. Change the password with `cli.js user:password <email>` (logs out every session). The web port
 is bound to 127.0.0.1 only. Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
-### Login: password locally, authentik on Tower
+### Login: password and/or OIDC
 Controlled by env (see `.env.example`). With no `AUTH_OIDC_*` set, only the password form is shown.
-On Tower set all three `AUTH_OIDC_*` to show "Sign in with authentik" (password stays as a fallback
-unless `AUTH_PASSWORD_LOGIN=false`). Partial OIDC config, or `AUTH_PASSWORD_LOGIN=false` without OIDC,
-stops the web container at startup. authentik setup:
-1. Applications → Providers → **OAuth2/OpenID Provider**: client type *Confidential*, redirect URI
-   `https://<novel host>/api/auth/callback/oidc`, signing key set (RS256), scopes `openid email profile`.
-   The `email` scope mapping must return `email_verified: true` for your user (the app refuses unverified emails).
-2. Applications → **Application** "chapterly" using that provider; slug `chapterly` → issuer
-   `https://auth.<domain>/application/o/chapterly/`. Bind it to your user/group only.
-3. First sign-in links your authentik identity to the account with the same email; afterwards only that
+Set all three `AUTH_OIDC_*` (issuer, client id, secret) to add a "Sign in with <AUTH_OIDC_NAME>" button
+(password stays as a fallback unless `AUTH_PASSWORD_LOGIN=false`). Partial OIDC config, or
+`AUTH_PASSWORD_LOGIN=false` without OIDC, stops the web container at startup. Provider setup:
+1. Create a *confidential* OAuth2/OpenID client with redirect URI
+   `https://<your host>/api/auth/callback/oidc`, RS256 signing, scopes `openid email profile`.
+   The provider must return `email_verified: true` for your user (the app refuses unverified emails).
+2. Use the provider's issuer URL for `AUTH_OIDC_ISSUER`, and restrict the client to your own user/group.
+3. First sign-in links the OIDC identity to the account with the same email; afterwards only that
    identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
-## Deploy on Tower
-The stack lives in `/mnt/ssdpool/docker/docker-compose/chapterly` (`compose.yaml` + source + `.env`).
-`/mnt/ssdpool/docker` is root-only, so updates run with sudo from your own terminal (sudo needs a TTY).
-Tower can't pull this private repo, so the source is copied from a checkout:
+## Deploy on a server
+Keep a git checkout of this repo on the server, next to its `.env` (never committed). To update, push
+from your machine, then pull and rebuild on the server:
 
-    git archive HEAD | ssh marvello@debian-tower 'cat > /tmp/chapterly.tar'
-    ssh -t marvello@debian-tower 'sudo sh -c "cd /mnt/ssdpool/docker/docker-compose/chapterly && tar -xf /tmp/chapterly.tar && docker compose up -d --build" && rm /tmp/chapterly.tar'
+    git push origin main
+    ssh <server> 'cd <chapterly dir> && git pull --ff-only && docker compose up -d --build'
 
-(`tar -x` doesn't delete files removed from the repo; wipe everything except `.env` if a change deletes
-files that matter.) Tower's `.env` (mode 600, never committed) sets `CHAPTERLY_LIBRARY_DIR=/disk_pool/book`
-(Audiobookshelf's `/books`), `CHAPTERLY_DATA_DIR=/mnt/ssdpool/docker/chapterly` (owned by 1000),
-`CHAPTERLY_WEB_PORT=3030` (3000/3010 are taken by waha/Dockhand) and `AUTH_URL=http://localhost:3030`.
-CLI commands: `docker exec -it chapterly-worker node cli.js …` (e.g. `user:create <email> "<name>"`).
-No public hostname yet: open it through `ssh -N -L 3030:127.0.0.1:3030 marvello@debian-tower` →
-http://localhost:3030. To go public later, add the DockFlare labels (`dockflare.enable`, `dockflare.hostname`,
-`dockflare.service=http://chapterly-web:3000`), join the external `proxy` network, and set `AUTH_URL` to
-the https hostname.
+In the server's `.env`, point `CHAPTERLY_LIBRARY_DIR` at the Audiobookshelf library, `PUID`/`PGID` at
+its owner, and optionally set `CHAPTERLY_DATA_DIR` (a host path), `CHAPTERLY_WEB_PORT` and `AUTH_URL`
+(the URL you open the UI at). CLI commands: `docker exec -it chapterly-worker node cli.js …`.
+The web port is bound to 127.0.0.1: reach it through an SSH tunnel (`ssh -N -L <port>:127.0.0.1:<port>
+<server>`) or an authenticating tunnel / reverse proxy, with `AUTH_URL` set to that https URL.
+
+A change to how EPUBs are packed only reaches existing books when they are next rebuilt (a new chapter
+arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterly-worker node cli.js build $i; done`.
 
 ## Novel manager (CLI)
     node cli.js add    https://freewebnovel.com/novel/<slug>   # fetch TOC, store novel + chapter list
@@ -100,10 +97,17 @@ the https hostname.
   an **admin** user; ABS → Settings → API Keys) and `CHAPTERLY_ABS_LIBRARY` (library name or id, e.g.
   `Ebooks`), the worker calls ABS's `POST /api/libraries/:id/scan` right after an EPUB changes, instead of
   waiting for ABS's nightly scan. Best effort: failures are logged, the check still succeeds. A partial
-  config stops the worker at startup. On Tower: `CHAPTERLY_ABS_URL=http://host.docker.internal:13378`.
+  config stops the worker at startup. For ABS published on the same host, use
+  `CHAPTERLY_ABS_URL=http://host.docker.internal:<ABS port>`.
 - **EPUB:** packed by WebToEpub's own `EpubPacker` (EPUB 3 + toc.ncx, cover embedded), written to
   `CHAPTERLY_LIBRARY/<Author>/<Title>/<Title>.epub` (default `library/` at the repo root) via temp file + rename. The
-  path is fixed on first build, so Audiobookshelf keeps it as one item.
+  path is fixed on first build, so Audiobookshelf keeps it as one item. Chapters are rendered one at a
+  time with an event-loop yield every 50, so memory stays flat for long novels (4800 chapters ≈ 750 MB
+  peak; packing them in one synchronous pass needed > 4 GB, because jsdom WeakRefs keep each sanitized
+  temp document alive until the task ends). A site heading that repeats the chapter title (`<h2>` with the
+  same "Chapter N" right under WebToEpub's `<h1>`, as on freewebnovel) is dropped at build time.
+- **"+N new" badge (web UI):** chapters fetched in the last 24 h. It expires on its own; rebuilding an
+  EPUB doesn't reset it.
 - `node:sqlite` prints an ExperimentalWarning on Node 24; `npm --prefix worker run worker` hides it, or set
   `NODE_OPTIONS=--disable-warning=ExperimentalWarning`.
 
@@ -143,7 +147,7 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   other sites instantly. The ~25 sites WebToEpub matches by URL/page rules instead of hostname can
   only be added with `cli.js add`.
 - Password login locks for up to 60 min after repeated failures, and anyone who can reach the login
-  page can trigger that. On Tower, authentik (OIDC) stays usable while it's locked.
+  page can trigger that. OIDC login, if configured, stays usable while it's locked.
 - Sites that render chapters with client-side JS, or sit behind interactive Cloudflare challenges (Turnstile),
   return empty/blocked HTML here too. Those need a Playwright fallback (next milestone).
 - `innerText` is approximated by `textContent` (jsdom has no layout); a few parsers that
@@ -157,8 +161,7 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   novel's original translator site over aggregators when WebToEpub supports it.
 
 ## Next
-1. **Deploy to Tower:** same `compose.yaml` (verified locally), with `.env` pointing
-   `CHAPTERLY_LIBRARY_DIR` at the Audiobookshelf library and `PUID`/`PGID` at its owner.
-2. **Tower web deploy:** `web` behind Cloudflare Tunnel + Access, with authentik OIDC verified live.
-3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
+1. **Crash-loop guard:** a check that crashes the worker is resumed on every restart; stop resuming the
+   same novel after a few consecutive crashes.
+2. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.
