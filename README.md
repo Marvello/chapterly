@@ -4,10 +4,7 @@ Self-hosted manager for the web novels I follow: add a novel by its table-of-con
 worker checks it daily and fetches only new chapters, and the EPUB is regenerated into the
 **Audiobookshelf** library folder (its folder watcher picks it up). Scraping reuses
 [WebToEpub](https://github.com/dteviot/WebToEpub)'s 640+ site parsers, run headless in Node (jsdom),
-instead of writing our own. (FanFicFare supports updates but not freewebnovel, the main site here.)
-
-Target: a self-hosted Docker host next to Audiobookshelf, Node 24. Don't expose the web UI directly;
-put it behind an authenticating tunnel or reverse proxy.
+instead of writing our own.
 
 ## Layout
     shared/     db.js (the only module with SQL) + migrations/ — used by both worker and web
