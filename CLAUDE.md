@@ -10,6 +10,9 @@ README.md has the full setup, env vars and CLI.
 - `worker/` scraper + scheduler + CLI (`node cli.js …`); `web/` Next.js UI (see `web/AGENTS.md`).
 - `npm test` at the root runs worker tests (offline mock site, full pipeline) + web vitest.
   Web type-check: `cd web && npx tsc --noEmit`.
+- Dependency holds (2026-10-05): `@zip.js/zip.js` stays `~2.7` (WebToEpub pins it; 2.23 drops
+  `dist/zip-no-worker.min.js`); eslint 9 (eslint-config-next's eslint-plugin-react crashes on 10); TypeScript 6
+  (typescript-eslint supports <6.1). `braces` advisory (lint-only, via eslint-config-next) has no patched release.
 
 ## Scheduling and retries (worker/src/worker.js)
 - Worker ticks every `CHAPTERLY_TICK_MIN`; `isDue` decides. A novel is due on "check now", its interval
