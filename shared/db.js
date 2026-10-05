@@ -100,8 +100,10 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                 }
             });
         },
+        /** html must already be sanitized (worker/src/sanitize.js). */
         saveChapter: (id, html) =>
-            run("UPDATE chapters SET html = ?, error = NULL, retry_at = NULL, fetched_at = ? WHERE id = ?", html, now(), id),
+            run("UPDATE chapters SET html = ?, html_clean = 1, error = NULL, retry_at = NULL, fetched_at = ? WHERE id = ?",
+                html, now(), id),
         failChapter: (id, error, retryAt) =>
             run("UPDATE chapters SET error = ?, attempts = attempts + 1, retry_at = ? WHERE id = ?", error, retryAt, id),
         /** Chapter list page without html (novels can have thousands of chapters). Newest first. */
@@ -144,6 +146,66 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         bindOidcSub: (id, sub) => Number(run("UPDATE users SET oidc_sub = ? WHERE id = ? AND oidc_sub IS NULL", sub, id).changes),
         unlinkOidc: id => run("UPDATE users SET oidc_sub = NULL WHERE id = ?", id),
 
+        // ── Reader ── chapter order is (idx, id) everywhere: idx is not unique per novel.
+        /** Per novel: progress for this user and `unread` = fetched chapters after it (all when not started). */
+        readerLibrary: userId => all(`
+            SELECT n.id, n.title, n.author, n.cover_url, n.toc_url,
+                   p.chapter_id AS progress_chapter_id, pc.idx AS progress_idx, p.fraction AS progress_fraction, p.read_at,
+                   COUNT(c.html) AS chapters_fetched,
+                   COALESCE(SUM(CASE WHEN c.html IS NOT NULL AND (p.chapter_id IS NULL OR c.idx > pc.idx
+                                     OR (c.idx = pc.idx AND c.id > pc.id)) THEN 1 ELSE 0 END), 0) AS unread
+            FROM novels n
+            LEFT JOIN reading_progress p ON p.novel_id = n.id AND p.user_id = ?
+            LEFT JOIN chapters pc ON pc.id = p.chapter_id
+            LEFT JOIN chapters c ON c.novel_id = n.id
+            GROUP BY n.id ORDER BY n.id`, userId),
+        readerToc: novelId =>
+            all("SELECT id, idx, title FROM chapters WHERE novel_id = ? AND html IS NOT NULL ORDER BY idx, id", novelId),
+        /** Fetched chapters (with html) after `afterChapterId` in (idx, id) order; from the start when null. */
+        readerChapters(novelId, afterChapterId, limit) {
+            const lim = Math.min(Math.max(1, limit), 200);
+            if (!afterChapterId) {
+                return all(`SELECT id, novel_id, idx, title, html, html_clean FROM chapters
+                            WHERE novel_id = ? AND html IS NOT NULL ORDER BY idx, id LIMIT ?`, novelId, lim);
+            }
+            return all(`SELECT c.id, c.novel_id, c.idx, c.title, c.html, c.html_clean FROM chapters c, chapters a
+                        WHERE a.id = ? AND a.novel_id = ? AND c.novel_id = a.novel_id AND c.html IS NOT NULL
+                          AND (c.idx > a.idx OR (c.idx = a.idx AND c.id > a.id))
+                        ORDER BY c.idx, c.id LIMIT ?`, afterChapterId, novelId, lim);
+        },
+        saveCleanHtml: (chapterId, html) => run("UPDATE chapters SET html = ?, html_clean = 1 WHERE id = ?", html, chapterId),
+        getProgress: (userId, novelId) => one(`
+            SELECT p.novel_id AS novelId, p.chapter_id AS chapterId, c.idx, p.fraction, p.read_at AS readAt
+            FROM reading_progress p JOIN chapters c ON c.id = p.chapter_id
+            WHERE p.user_id = ? AND p.novel_id = ?`, userId, novelId) ?? null,
+        /**
+         * Saves only a further position (by idx, id, fraction) unless `force` (the reader confirmed moving back).
+         * Returns the stored position either way and whether this call changed it.
+         */
+        saveProgress(userId, { novelId, chapterId, fraction, readAt, force }) {
+            return tx(() => {
+                const ch = one("SELECT id, idx FROM chapters WHERE id = ? AND novel_id = ?", chapterId, novelId);
+                if (!ch) throw new Error(`chapter ${chapterId} is not in novel ${novelId}`);
+                const cur = one(`SELECT p.chapter_id, p.fraction, c.idx FROM reading_progress p
+                                 JOIN chapters c ON c.id = p.chapter_id WHERE p.user_id = ? AND p.novel_id = ?`, userId, novelId);
+                const further = !cur || ch.idx > cur.idx || (ch.idx === cur.idx &&
+                    (ch.id > cur.chapter_id || (ch.id === cur.chapter_id && fraction > cur.fraction)));
+                const saved = !!(force || further);
+                if (saved) {
+                    run(`INSERT INTO reading_progress (user_id, novel_id, chapter_id, fraction, read_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?)
+                         ON CONFLICT (user_id, novel_id) DO UPDATE SET chapter_id = excluded.chapter_id,
+                           fraction = excluded.fraction, read_at = excluded.read_at, updated_at = excluded.updated_at`,
+                        userId, novelId, chapterId, fraction, readAt, now());
+                }
+                const position = one(`SELECT p.novel_id AS novelId, p.chapter_id AS chapterId, c.idx, p.fraction,
+                                             p.read_at AS readAt
+                                      FROM reading_progress p JOIN chapters c ON c.id = p.chapter_id
+                                      WHERE p.user_id = ? AND p.novel_id = ?`, userId, novelId) ?? null;
+                return { saved, position };
+            });
+        },
+        setEpubEnabled: (id, on) => run("UPDATE novels SET epub_enabled = ? WHERE id = ?", on ? 1 : 0, id),
         /** True when chapters were fetched after the EPUB was last built (or it was never built). */
         epubStale(novelId) {
             const r = one(`SELECT n.epub_built_at AS built, MAX(c.fetched_at) AS latest

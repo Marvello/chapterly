@@ -7,7 +7,7 @@ const row = (o: Partial<LibraryRow>): LibraryRow => ({
   description: null, cover_url: null, status: "active", check_interval_min: 1440, last_checked_at: null,
   last_success_at: null, last_error: null, epub_path: null, epub_built_at: null, created_at: "",
   check_requested_at: null, check_finished_at: null, series_status: "ongoing", series_status_manual: 0,
-  check_failures: 0, check_retry_at: null,
+  check_failures: 0, check_retry_at: null, epub_enabled: 1,
   chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, last_fetched_at: null, next_retry_at: null, ...o,
 });
 

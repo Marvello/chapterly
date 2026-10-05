@@ -12,10 +12,12 @@ export interface NovelRow {
   check_requested_at: string | null; check_finished_at: string | null;
   series_status: "ongoing" | "completed" | "dropped"; series_status_manual: 0 | 1;
   check_failures: number; check_retry_at: string | null;
+  epub_enabled: 0 | 1;
 }
 export interface LibraryRow extends NovelRow {
   chapters_total: number; chapters_fetched: number; chapters_failing: number; chapters_new: number;
   last_fetched_at: string | null; next_retry_at: string | null;
+  unread?: number | null; // filled in by the library page from readerLibrary (null = not started)
 }
 export interface ChapterRow {
   id: number; idx: number; url: string; title: string | null; fetched_at: string | null;
@@ -25,6 +27,15 @@ export interface UserRow {
   id: number; name: string | null; email: string; password_hash: string; failed_logins: number;
   locked_until: string | null; session_version: number; oidc_sub: string | null; created_at: string;
 }
+export interface ReaderPosition { novelId: number; chapterId: number; idx: number; fraction: number; readAt: string }
+export interface TocEntry { id: number; idx: number; title: string | null }
+export interface ReaderChapterRow extends TocEntry { novel_id: number; html: string; html_clean: 0 | 1 }
+export interface ReaderNovel {
+  id: number; title: string | null; author: string | null; cover_url: string | null; toc_url: string;
+  chapters_fetched: number; unread: number;
+  progress_chapter_id: number | null; progress_idx: number | null; progress_fraction: number | null; read_at: string | null;
+}
+export interface ProgressInput { novelId: number; chapterId: number; fraction: number; readAt: string; force: boolean }
 export interface Db {
   addNovel(url: string): NovelRow;
   findNovelByUrl(url: string): NovelRow | undefined;
@@ -46,6 +57,13 @@ export interface Db {
   recordLoginSuccess(id: number): void;
   bindOidcSub(id: number, sub: string): number;
   isSupportedHost(host: string): boolean | null;
+  readerLibrary(userId: number): ReaderNovel[];
+  readerToc(novelId: number): TocEntry[];
+  readerChapters(novelId: number, afterChapterId: number | null, limit: number): ReaderChapterRow[];
+  saveCleanHtml(chapterId: number, html: string): void;
+  getProgress(userId: number, novelId: number): ReaderPosition | null;
+  saveProgress(userId: number, p: ProgressInput): { saved: boolean; position: ReaderPosition | null };
+  setEpubEnabled(id: number, on: boolean): void;
 }
 
 const cache = globalThis as unknown as { __novelDb?: Db };

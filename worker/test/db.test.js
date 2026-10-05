@@ -135,6 +135,56 @@ const fresh = name => path.join(tmp, name);
     assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), false, "replace, not append");
     sdb.close();
 
+    // Reader: progress only moves forward unless forced; unread and paging follow (idx, id).
+    {
+        const rdb = openDb(fresh("reader.db"));
+        const u = rdb.createUser({ email: "r@example.com", name: null, passwordHash: "x" });
+        const nid = rdb.addNovel("https://example.com/novel/r").id;
+        rdb.addChapters(nid, [1, 2, 2, 3, 4].map((index, i) => ({ index, url: `https://example.com/c${i}`, title: `C${i}` })));
+        const rows = rdb.chapters(nid);
+        for (const c of rows.slice(0, 4)) rdb.saveChapter(c.id, `<p>${c.title}</p>`);   // C4 stays unfetched
+
+        const toc = rdb.readerToc(nid);
+        assert.deepStrictEqual(toc.map(c => c.idx), [1, 2, 2, 3], "fetched chapters only, (idx, id) order");
+        assert.ok(rdb.readerChapters(nid, null, 10).every(c => c.html_clean === 1), "saveChapter marks html clean");
+
+        // paging after a duplicate idx: no skip, no repeat
+        assert.deepStrictEqual(rdb.readerChapters(nid, toc[1].id, 10).map(c => c.id), [toc[2].id, toc[3].id]);
+        assert.deepStrictEqual(rdb.readerChapters(nid, null, 2).map(c => c.id), [toc[0].id, toc[1].id]);
+        assert.deepStrictEqual(rdb.readerChapters(nid, toc[3].id, 10), []);
+
+        const lib = () => rdb.readerLibrary(u.id).find(n => n.id === nid);
+        assert.strictEqual(lib().unread, 4, "not started: every fetched chapter is unread");
+        assert.strictEqual(lib().progress_chapter_id, null);
+
+        const save = (c, fraction, force = false) =>
+            rdb.saveProgress(u.id, { novelId: nid, chapterId: c.id, fraction, readAt: new Date().toISOString(), force });
+        assert.strictEqual(save(toc[2], 0.5).saved, true, "first position is saved");
+        assert.strictEqual(save(toc[1], 0.9).saved, false, "behind (same idx, lower id) is not saved");
+        assert.strictEqual(save(toc[2], 0.2).saved, false, "same chapter, lower fraction is not saved");
+        const r = save(toc[2], 0.7);
+        assert.deepStrictEqual([r.saved, r.position.chapterId, r.position.fraction], [true, toc[2].id, 0.7]);
+        assert.strictEqual(lib().unread, 1);
+        assert.strictEqual(save(toc[3], 0).saved, true);
+        assert.strictEqual(lib().unread, 0);
+        const back = save(toc[0], 0.1, true);
+        assert.deepStrictEqual([back.saved, back.position.chapterId], [true, toc[0].id], "force moves back");
+        assert.strictEqual(lib().unread, 3);
+        assert.strictEqual(rdb.getProgress(u.id, nid).chapterId, toc[0].id);
+
+        const other = rdb.addNovel("https://example.com/novel/other").id;
+        assert.throws(() => rdb.saveProgress(u.id, { novelId: other, chapterId: toc[0].id, fraction: 0,
+            readAt: new Date().toISOString(), force: false }), /not in novel/);
+
+        rdb.saveCleanHtml(toc[0].id, "<p>clean</p>");
+        assert.strictEqual(rdb.readerChapters(nid, null, 1)[0].html, "<p>clean</p>");
+
+        assert.strictEqual(rdb.getNovel(nid).epub_enabled, 1, "EPUB on by default");
+        rdb.setEpubEnabled(nid, false);
+        assert.strictEqual(rdb.getNovel(nid).epub_enabled, 0);
+        rdb.close();
+    }
+
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log("✓ db test passed");
 })().catch(e => { console.error("✗", e); process.exit(1); });
