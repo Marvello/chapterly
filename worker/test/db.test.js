@@ -71,7 +71,18 @@ const fresh = name => path.join(tmp, name);
     const [row] = w.listNovels(new Date(Date.now() - 86_400_000).toISOString());
     assert.deepStrictEqual(
         [row.chapters_total, row.chapters_fetched, row.chapters_failing, row.chapters_new], [3, 1, 1, 1]);
-    w.addNovel("https://example.com/novel/b");
+    const nb = w.addNovel("https://example.com/novel/b");
+    assert.deepStrictEqual(w.listNovels(undefined, nb.id).map(r => r.id), [nb.id], "filtered to one novel");
+    assert.strictEqual(w.listNovels().length, 2);
+    // The per-tick aggregate is answered from the covering index, never the chapter rows (html).
+    const raw3 = new DatabaseSync(fresh("web.db"));
+    const plan = raw3.prepare(`EXPLAIN QUERY PLAN SELECT COUNT(c.id), COUNT(c.fetched_at), SUM(c.attempts),
+        MIN(c.retry_at) FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id GROUP BY n.id`).all();
+    assert.ok(plan.some(r => /COVERING INDEX chapters_stats_idx/.test(r.detail)), JSON.stringify(plan));
+    raw3.close();
+    assert.strictEqual(w.workerSeenAt(), null, "no heartbeat yet");
+    w.heartbeat();
+    assert.ok(Date.now() - Date.parse(w.workerSeenAt()) < 5000);
     const [empty] = w.listNovels().filter(r => r.chapters_total === 0);
     assert.deepStrictEqual([empty.chapters_failing, empty.chapters_new], [0, 0], "counts are 0, not null");
 
@@ -152,7 +163,7 @@ const fresh = name => path.join(tmp, name);
         assert.deepStrictEqual(rdb.readerChapters(nid, null, 2).map(c => c.id), [toc[0].id, toc[1].id]);
         assert.deepStrictEqual(rdb.readerChapters(nid, toc[3].id, 10), []);
 
-        const lib = () => rdb.readerLibrary(u.id).find(n => n.id === nid);
+        const lib = () => rdb.readerLibrary(u.id, nid)[0];
         assert.strictEqual(lib().unread, 4, "not started: every fetched chapter is unread");
         assert.strictEqual(lib().progress_chapter_id, null);
 

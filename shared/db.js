@@ -36,15 +36,19 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         },
         getNovel: id => one("SELECT * FROM novels WHERE id = ?", id),
         findNovelByUrl: url => one("SELECT * FROM novels WHERE toc_url = ?", url),
-        /** @param newSince ISO time; chapters fetched at/after it count as "new". */
-        listNovels: (newSince = now()) => all(`
-            SELECT n.*, COUNT(c.id) AS chapters_total, COUNT(c.html) AS chapters_fetched,
-                   COALESCE(SUM(CASE WHEN c.html IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END), 0) AS chapters_failing,
+        /**
+         * @param newSince ISO time; chapters fetched at/after it count as "new". novelId: just that novel.
+         * Uses fetched_at (set together with html) so chapters_stats_idx covers it without reading html.
+         */
+        listNovels: (newSince = now(), novelId = null) => all(`
+            SELECT n.*, COUNT(c.id) AS chapters_total, COUNT(c.fetched_at) AS chapters_fetched,
+                   COALESCE(SUM(CASE WHEN c.fetched_at IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END), 0) AS chapters_failing,
                    COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new,
                    MAX(c.fetched_at) AS last_fetched_at,
-                   MIN(CASE WHEN c.html IS NULL THEN c.retry_at END) AS next_retry_at
+                   MIN(CASE WHEN c.fetched_at IS NULL THEN c.retry_at END) AS next_retry_at
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
-            GROUP BY n.id ORDER BY n.id`, newSince),
+            WHERE (? IS NULL OR n.id = ?)
+            GROUP BY n.id ORDER BY n.id`, newSince, novelId, novelId),
         /** Active novels whose last check started but never finished (worker stopped mid-check). */
         interruptedChecks: () => all(`SELECT * FROM novels WHERE status = 'active' AND last_checked_at IS NOT NULL
               AND last_checked_at > COALESCE(check_finished_at, '') ORDER BY id`),
@@ -121,6 +125,11 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? AND html IS NULL AND attempts > 0 ORDER BY idx, id`,
                 novelId),
 
+        /** Worker liveness, stamped every tick (and per chapter during long checks). */
+        heartbeat: () => run(`INSERT INTO worker_status (id, seen_at) VALUES (1, ?)
+            ON CONFLICT (id) DO UPDATE SET seen_at = excluded.seen_at`, now()),
+        workerSeenAt: () => one("SELECT seen_at FROM worker_status WHERE id = 1")?.seen_at ?? null,
+
         /** Replace the list of hostnames with a dedicated WebToEpub parser. */
         replaceSupportedSites(hosts) {
             tx(() => {
@@ -154,8 +163,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         unlinkOidc: id => run("UPDATE users SET oidc_sub = NULL, session_version = session_version + 1 WHERE id = ?", id),
 
         // ── Reader ── chapter order is (idx, id) everywhere: idx is not unique per novel.
-        /** Per novel: progress for this user and `unread` = fetched chapters after it (all when not started). */
-        readerLibrary: userId => all(`
+        /** Per novel (or just novelId): progress for this user and `unread` = fetched chapters after it (all when not started). */
+        readerLibrary: (userId, novelId = null) => all(`
             SELECT n.id, n.title, n.author, n.cover_url, n.toc_url,
                    p.chapter_id AS progress_chapter_id, pc.idx AS progress_idx, p.fraction AS progress_fraction, p.read_at,
                    COUNT(c.html) AS chapters_fetched,
@@ -165,7 +174,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             LEFT JOIN reading_progress p ON p.novel_id = n.id AND p.user_id = ?
             LEFT JOIN chapters pc ON pc.id = p.chapter_id
             LEFT JOIN chapters c ON c.novel_id = n.id
-            GROUP BY n.id ORDER BY n.id`, userId),
+            WHERE (? IS NULL OR n.id = ?)
+            GROUP BY n.id ORDER BY n.id`, userId, novelId, novelId),
         readerToc: novelId =>
             all("SELECT id, idx, title FROM chapters WHERE novel_id = ? AND html IS NOT NULL ORDER BY idx, id", novelId),
         /** Fetched chapters (with html) after `afterChapterId` in (idx, id) order; from the start when null. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary } from "./view";
+import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -41,6 +41,23 @@ it("relativeTime", () => {
   expect(relativeTime(ago(3 * 3_600_000), now)).toBe("3h ago");
   expect(relativeTime(ago(2 * 86_400_000), now)).toBe("2d ago");
   expect(relativeTime(new Date(now + 90 * 60_000).toISOString(), now)).toBe("in 1h");
+});
+
+it("nextCheckLabel: due now once overdue, never 'next 6d ago'", () => {
+  const now = Date.parse("2026-01-10T00:00:00Z");
+  expect(nextCheckLabel("2026-01-04T00:00:00.000Z", now)).toBe("due now");
+  expect(nextCheckLabel("2026-01-10T00:00:00.000Z", now)).toBe("due now");
+  expect(nextCheckLabel("2026-01-10T03:00:00.000Z", now)).toBe("next in 3h");
+});
+
+it("workerDown: no heartbeat for 3 ticks (at least 10 min), or never", () => {
+  const now = Date.parse("2026-01-10T00:00:00Z");
+  const ago = (min: number) => new Date(now - min * 60_000).toISOString();
+  expect(workerDown(null, 1, now)).toBe(true);
+  expect(workerDown(ago(9), 1, now)).toBe(false);
+  expect(workerDown(ago(11), 1, now)).toBe(true);
+  expect(workerDown(ago(50), 30, now)).toBe(false);
+  expect(workerDown(ago(91), 30, now)).toBe(true);
 });
 
 it("newSince is 24 h before now", () => {

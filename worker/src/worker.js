@@ -65,6 +65,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
         let failed = 0;
         for (const [i, c] of pending.entries()) {
             // Deleted or paused from the UI mid-check: stop now instead of fetching the rest.
+            db.heartbeat();   // a long check spans many ticks: the worker is still alive
             if (db.getNovel(id)?.status !== "active") {
                 log(`[${id}] deleted or paused, stopping this check`);
                 break;
@@ -196,6 +197,7 @@ async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TIC
     if (onEpubWritten) log("Audiobookshelf rescans enabled");
     log(`worker started: checking due novels every ${tickMin} min`);
     for (;;) {
+        db.heartbeat();
         await checkDue(db, scraper, log, { onEpubWritten });
         await new Promise(r => setTimeout(r, tickMin * 60_000));
     }

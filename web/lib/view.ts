@@ -99,6 +99,17 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
   return diff >= 0 ? `${v}${unit} ago` : `in ${v}${unit}`;
 }
 
+/** "next in 3h", or "due now" once that time has passed (instead of "next 6d ago"). */
+export const nextCheckLabel = (iso: string, now = Date.now()) =>
+  Date.parse(iso) <= now ? "due now" : `next ${relativeTime(iso, now)}`;
+
+/**
+ * The worker stamps a heartbeat every tick (and per chapter while a long check runs): none for 3 ticks → not
+ * running. At least 10 min, as one chapter fetch can take minutes (timeout + throttle).
+ */
+export const workerDown = (seenAt: string | null, tickMin: number, now = Date.now()) =>
+  !seenAt || now - Date.parse(seenAt) > Math.max(3 * tickMin, 10) * 60_000;
+
 /** Chapters fetched at/after this time count as "+N new" in the library (last 24 h). */
 export const newSince = (now = Date.now()) => new Date(now - 86_400_000).toISOString();
 
