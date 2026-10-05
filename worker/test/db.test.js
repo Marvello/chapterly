@@ -93,7 +93,8 @@ const fresh = name => path.join(tmp, name);
     assert.strictEqual(w.bindOidcSub(u.id, "sub-2"), 0, "never re-binds an already bound user");
     assert.strictEqual(w.getUserByOidcSub("sub-1").id, u.id);
     w.unlinkOidc(u.id);
-    assert.strictEqual(w.getUserById(u.id).oidc_sub, null);
+    assert.deepStrictEqual([w.getUserById(u.id).oidc_sub, w.getUserById(u.id).session_version], [null, 3],
+        "unlinking logs out existing sessions");
     assert.throws(() => w.createUser({ email: "me@example.com", name: null, passwordHash: "x" }), /UNIQUE/);
     w.close();
 
@@ -110,7 +111,7 @@ const fresh = name => path.join(tmp, name);
     assert.throws(() => ss.setSeriesStatus(sn.id, "paused"), /CHECK/);
     ss.close();
 
-    // ---- interrupted checks (started, never finished) get a "check now" on worker start ----
+    // ---- interrupted checks (started, never finished) are found on worker start ----
     const ir = openDb(fresh("interrupted.db"));
     const cut = ir.addNovel("https://example.com/novel/cut").id;        // started, never finished
     const fine = ir.addNovel("https://example.com/novel/fine").id;      // finished normally
@@ -119,9 +120,7 @@ const fresh = name => path.join(tmp, name);
     for (const x of [cut, fine, paused]) ir.markCheckStarted(x);
     ir.markCheckDone(fine, null);
     ir.setStatus(paused, "paused");
-    assert.strictEqual(ir.requestInterruptedChecks(), 1);
-    assert.ok(ir.getNovel(cut).check_requested_at);
-    for (const x of [fine, paused, fresh1]) assert.strictEqual(ir.getNovel(x).check_requested_at, null);
+    assert.deepStrictEqual(ir.interruptedChecks().map(r => r.id), [cut], `not finished/paused/never checked (#${fresh1})`);
     ir.close();
 
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----

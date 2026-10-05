@@ -197,6 +197,20 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     const cutChapters = db.chapters(cutId);
     assert.strictEqual(cutChapters.filter(c => c.html).length, 6, "all chapters present after resume");
     assert.strictEqual(cutChapters.filter(c => c.html === "<p>saved before the crash</p>").length, 2, "saved chapters not refetched");
+    // Interrupted twice in a row (the novel crashes the worker): resumed once, then it backs off instead.
+    await new Promise(r => setTimeout(r, 5));   // timestamps are ms: start after the last finish
+    db.markCheckStarted(cutId);
+    resumeInterruptedChecks(db, quiet);
+    assert.ok(db.getNovel(cutId).check_requested_at, "first interruption: resumed right away");
+    await new Promise(r => setTimeout(r, 5));
+    db.markCheckStarted(cutId);                                       // the resumed check dies too
+    resumeInterruptedChecks(db, quiet, { retryBaseMin: 60 });
+    const again = db.getNovel(cutId);
+    assert.strictEqual(again.check_requested_at, null, "not resumed a second time");
+    assert.ok(Date.parse(again.check_retry_at) - Date.now() > 100 * 60_000, "backs off (2nd failure: 2h)");
+    assert.ok(!isDue(db.listNovels().find(r => r.id === cutId)));
+    assert.deepStrictEqual(db.interruptedChecks(), [], "recorded as finished (with an error)");
+    db.markCheckDone(cutId, null);                                    // reset for the tests below
 
     // The worker publishes the supported hostnames for the web form.
     syncSupportedSites(db, s);

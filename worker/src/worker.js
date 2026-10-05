@@ -57,7 +57,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
         if (!novel.chapters.length) throw new Error(`No chapters found at ${novelRow.toc_url} (parser ${novel.parser})`);
         db.updateNovelMeta(id, novel);
         if (novel.siteStatus) db.applySiteSeriesStatus(id, novel.siteStatus);
-        const { added } = diffChapters(db.chapters(id), novel.chapters);
+        const { added } = diffChapters(db.chapterKeys(id), novel.chapters);
         db.addChapters(id, added);
 
         const pending = db.pendingChapters(id, maxAttempts);
@@ -162,10 +162,21 @@ async function checkDue(db, scraper, log = console.log, opts = {}) {
     }
 }
 
-/** On startup: resume checks the worker was stopped in the middle of (restart, redeploy, crash). */
-function resumeInterruptedChecks(db, log = console.log) {
-    const n = db.requestInterruptedChecks();
-    if (n) log(`resuming ${n} interrupted check(s)`);
+/**
+ * On startup: resume checks the worker was stopped in the middle of (restart, redeploy, crash). An interruption
+ * counts as a failed check: the first is resumed right away ("check now"); another one before a check succeeds
+ * (e.g. this novel OOMs the worker) backs off like any failed check instead of crash-looping ahead of the rest.
+ */
+function resumeInterruptedChecks(db, log = console.log, { retryBaseMin } = retryPolicy()) {
+    const cut = db.interruptedChecks();
+    for (const n of cut) {
+        const again = n.check_failures > 0;
+        db.markCheckDone(n.id, "Interrupted: the worker stopped mid-check",
+            again ? nextRetryAt(n.check_failures + 1, retryBaseMin) : new Date().toISOString());
+        if (again) log(`[${n.id}] interrupted again, retrying after the backoff`);
+        else db.requestCheck(n.id);
+    }
+    if (cut.length) log(`resuming ${cut.length} interrupted check(s)`);
 }
 
 /** Publish the hostnames WebToEpub has a dedicated parser for, so the web form can validate URLs. */
@@ -175,6 +186,9 @@ function syncSupportedSites(db, scraper) {
 
 /** Run forever: wake every `tickMin` minutes and check whichever novels are due. */
 async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TICK_MIN || 1), log = console.log } = {}) {
+    // As PID 1 in a container node ignores SIGTERM, so every rollout waited for the SIGKILL. Exiting mid-check is
+    // safe: the EPUB write is atomic (temp file + rename) and the check is resumed on the next start.
+    for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => process.exit(0));
     syncSupportedSites(db, scraper);
     resumeInterruptedChecks(db, log);
     // Throws on a partial CHAPTERLY_ABS_* config, so a typo stops the worker instead of silently skipping rescans.

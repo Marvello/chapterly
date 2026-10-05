@@ -23,7 +23,7 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
     const all = (sql, ...p) => db.prepare(sql).all(...p);
     const run = (sql, ...p) => db.prepare(sql).run(...p);
     const tx = fn => {
-        db.exec("BEGIN");
+        db.exec("BEGIN IMMEDIATE");   // take the write lock up front: read-then-write can't hit SQLITE_BUSY_SNAPSHOT
         try { const r = fn(); db.exec("COMMIT"); return r; } catch (e) { db.exec("ROLLBACK"); throw e; }
     };
 
@@ -45,10 +45,9 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                    MIN(CASE WHEN c.html IS NULL THEN c.retry_at END) AS next_retry_at
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
             GROUP BY n.id ORDER BY n.id`, newSince),
-        /** Active novels whose last check started but never finished (worker stopped mid-check) → "check now". */
-        requestInterruptedChecks: () => Number(run(`UPDATE novels SET check_requested_at = ?
-            WHERE status = 'active' AND check_requested_at IS NULL AND last_checked_at IS NOT NULL
-              AND last_checked_at > COALESCE(check_finished_at, '')`, now()).changes),
+        /** Active novels whose last check started but never finished (worker stopped mid-check). */
+        interruptedChecks: () => all(`SELECT * FROM novels WHERE status = 'active' AND last_checked_at IS NOT NULL
+              AND last_checked_at > COALESCE(check_finished_at, '') ORDER BY id`),
         requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
         /** Your choice: from now on the site's status never overrides it. */
         setSeriesStatus: (id, status) =>
@@ -82,6 +81,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             run("UPDATE novels SET epub_path = ?, epub_built_at = ? WHERE id = ?", epubPath, now(), id),
 
         chapters: novelId => all("SELECT * FROM chapters WHERE novel_id = ? ORDER BY idx, id", novelId),
+        /** What the TOC diff needs, without loading every chapter's html. */
+        chapterKeys: novelId => all("SELECT url, title FROM chapters WHERE novel_id = ?", novelId),
         /** Unfetched chapters that are due: under the attempt limit and past their backoff. */
         pendingChapters: (novelId, maxAttempts) =>
             all(`SELECT * FROM chapters WHERE novel_id = ? AND html IS NULL AND attempts < ?
@@ -149,7 +150,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         recordLoginSuccess: id => run("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id),
         /** Binds only if the user has no OIDC identity yet; returns rows changed (0 = refused). */
         bindOidcSub: (id, sub) => Number(run("UPDATE users SET oidc_sub = ? WHERE id = ? AND oidc_sub IS NULL", sub, id).changes),
-        unlinkOidc: id => run("UPDATE users SET oidc_sub = NULL WHERE id = ?", id),
+        /** Also bumps session_version: sessions signed in through the old identity are logged out. */
+        unlinkOidc: id => run("UPDATE users SET oidc_sub = NULL, session_version = session_version + 1 WHERE id = ?", id),
 
         // ── Reader ── chapter order is (idx, id) everywhere: idx is not unique per novel.
         /** Per novel: progress for this user and `unread` = fetched chapters after it (all when not started). */
