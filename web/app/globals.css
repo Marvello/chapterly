@@ -21,3 +21,10 @@
 body { background: var(--page); color: var(--tsecondary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 input, select, textarea { outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+/* Reader: chapter HTML from novel sites (sanitized server-side). Image paths point inside the EPUB,
+   so images are hidden. Tailwind's preflight removes margins; give prose its spacing back. */
+.reader-content img { display: none; }
+.reader-content p { margin: 0 0 1em; }
+.reader-content h1, .reader-content h2, .reader-content h3 { font-weight: 600; font-size: 1.2em; margin: 0 0 1em; }
+.reader-content a { text-decoration: underline; }

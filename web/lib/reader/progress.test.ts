@@ -37,6 +37,8 @@ describe("decide", () => {
     expect(decide(P(2, 2), P(1, 1))).toBe("save");
     expect(decide(P(1, 1), P(2, 2))).toBe("behind");
     expect(decide(P(2, 2, 0.3), P(2, 2, 0.3))).toBe("same");
+    // scrolling back within the saved chapter (re-reading a paragraph) neither saves nor nags
+    expect(decide(P(2, 2, 0.1), P(2, 2, 0.3))).toBe("same");
   });
 });
 

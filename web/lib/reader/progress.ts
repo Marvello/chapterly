@@ -23,10 +23,11 @@ export function savedProgress(stored: Position | null, pending: OutboxEntry | nu
 export const mergeOutbox = (prev: OutboxEntry | undefined, next: OutboxEntry): OutboxEntry =>
   ({ ...next, force: next.force || !!prev?.force });
 
+/** "behind" only for an earlier chapter: scrolling back inside the saved chapter (re-reading) is ignored. */
 export function decide(current: Position, saved: Position | null): "save" | "behind" | "same" {
   if (!saved) return "save";
-  const c = compare(current, saved);
-  return c > 0 ? "save" : c < 0 ? "behind" : "same";
+  if (compare(current, saved) > 0) return "save";
+  return compare({ ...current, fraction: 0 }, { ...saved, fraction: 0 }) < 0 ? "behind" : "same";
 }
 
 export function chapterState(c: TocEntry, saved: Position | null): "read" | "current" | "unread" {
