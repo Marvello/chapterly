@@ -14,6 +14,7 @@ export function parseNovelUrl(input: unknown): { ok: true; url: string } | { ok:
   let u: URL;
   try { u = new URL(s); } catch { return { ok: false, error: "That doesn't look like a URL." }; }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "Only http(s) URLs are supported." };
+  u.hash = u.username = u.password = ""; // no stored credentials; #fragment variants aren't a different novel
   return { ok: true, url: u.href };
 }
 
@@ -27,13 +28,27 @@ export function parseId(input: unknown): number | null {
 }
 
 /**
- * Only sites with a dedicated WebToEpub parser can be scraped (the worker publishes the hostnames).
- * Returns an error message, or null when supported — or when the list isn't published yet
- * (lookup → null), in which case the worker's own check still rejects unsupported sites.
+ * Only sites with a dedicated WebToEpub parser can be scraped (the worker publishes the hostnames on startup).
+ * Returns an error message, or null when supported. No list yet (lookup → null) is an error too: the worker
+ * fetches a URL before it can tell it has no parser, so unchecked adds would let anyone make it fetch anything.
  */
 export function checkSupportedSite(url: string, isSupportedHost: (host: string) => boolean | null): string | null {
   const host = new URL(url).hostname.replace(/^www\./, "");
-  return isSupportedHost(host) === false ? `${host} isn't a supported site (no WebToEpub parser).` : null;
+  const ok = isSupportedHost(host);
+  if (ok === null) return "The worker hasn't started yet (no supported-site list). Try again in a minute.";
+  return ok ? null : `${host} isn't a supported site (no WebToEpub parser).`;
+}
+
+/** Request body as text, or null once it passes `max` bytes (stops reading there: no unbounded buffering). */
+export async function readCapped(req: Request, max: number): Promise<string | null> {
+  if (Number(req.headers.get("content-length")) > max) return null;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const c of req.body ?? []) {
+    if ((size += c.byteLength) > max) return null; // leaving the loop cancels the stream
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 export const SERIES_STATUSES = [
