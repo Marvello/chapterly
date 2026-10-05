@@ -110,7 +110,7 @@ const WEEK_MIN = 7 * 24 * 60;
 
 /**
  * When the worker will next check (same rule as worker/src/worker.js isDue): dropped → at least weekly,
- * or earlier when a failed check or chapter is due for a retry.
+ * or earlier when a failed check or chapter is due for a retry (a failed check's backoff holds chapter retries back).
  */
 export function nextCheckAt(
   n: Pick<NovelRow, "last_checked_at" | "check_interval_min" | "series_status"> &
@@ -119,5 +119,6 @@ export function nextCheckAt(
   if (!n.last_checked_at) return null;
   const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
   const scheduled = new Date(Date.parse(n.last_checked_at) + intervalMin * 60_000).toISOString();
-  return [n.check_retry_at, n.next_retry_at].reduce<string>((min, t) => (t && t < min ? t : min), scheduled);
+  const retryAt = n.check_retry_at || n.next_retry_at;
+  return retryAt && retryAt < scheduled ? retryAt : scheduled;
 }

@@ -88,6 +88,9 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         gaveUpChapters: (novelId, maxAttempts) =>
             all("SELECT * FROM chapters WHERE novel_id = ? AND html IS NULL AND attempts >= ? ORDER BY idx, id",
                 novelId, maxAttempts),
+        clearGaveUpRetries: (novelId, maxAttempts) =>
+            run("UPDATE chapters SET retry_at = NULL WHERE novel_id = ? AND html IS NULL AND attempts >= ? AND retry_at IS NOT NULL",
+                novelId, maxAttempts),
         /** Give failed chapters a fresh set of attempts, due immediately. */
         resetChapterRetries: novelId =>
             run("UPDATE chapters SET attempts = 0, retry_at = NULL WHERE novel_id = ? AND html IS NULL", novelId),

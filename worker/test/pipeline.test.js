@@ -90,6 +90,10 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     site.broken.add(ch7);
     await checkNovel(db, s, db.getNovel(id), quiet, fastGiveUp);   // retry_at (set with the 60-min base) not reached
     assert.strictEqual(db.chapters(id).find(c => c.url === ch7).attempts, 1, "still backing off");
+    // Limit lowered below a chapter's attempts: its retry_at is dropped, so it can't keep the novel due forever.
+    await checkNovel(db, s, db.getNovel(id), quiet, { maxAttempts: 1 });
+    assert.strictEqual(db.chapters(id).find(c => c.url === ch7).retry_at, null);
+    assert.strictEqual(db.listNovels().find(r => r.id === id).next_retry_at, null);
     db.resetChapterRetries(id);
     await checkNovel(db, s, db.getNovel(id), quiet, fastGiveUp);   // attempt 1, retry now
     site.requests.length = 0;
@@ -116,6 +120,9 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
 
     // Backoff doubles per attempt: 1h, 2h, 4h, 8h.
     assert.deepStrictEqual([1, 2, 3, 4].map(a => (Date.parse(nextRetryAt(a, 60, 0))) / 3_600_000), [1, 2, 4, 8]);
+    // Capped at a week, and never an invalid Date (2^n used to overflow after ~33 failed checks).
+    assert.strictEqual(Date.parse(nextRetryAt(100, 60, 0)), 7 * 86_400_000);
+    assert.strictEqual(Date.parse(nextRetryAt(5000, 60, 0)), 7 * 86_400_000);
 
     // Scheduling: due when requested, never checked, or interval passed since the last start; never when paused.
     const t = Date.now(), ago = min => new Date(t - min * 60_000).toISOString();
@@ -131,6 +138,10 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.ok(!isDue({ ...due, status: "paused", last_checked_at: ago(1), next_retry_at: ago(0) }, t));
     assert.ok(isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(0) }, t), "failed check retry due");
     assert.ok(!isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(-5) }, t));
+    assert.ok(!isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(-5), next_retry_at: ago(10) }, t),
+        "a failed check's backoff holds chapter retries back (site down: no TOC fetch every tick)");
+    assert.ok(isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(-5), check_requested_at: ago(0) }, t),
+        "check now still wins over the backoff");
     // Series status: completed + everything fetched → no more scheduled checks; dropped → weekly at most.
     const done = { ...due, series_status: "completed", chapters_total: 10, chapters_fetched: 10 };
     assert.ok(!isDue({ ...done, last_checked_at: ago(100000) }, t), "finished completed novel is never due");

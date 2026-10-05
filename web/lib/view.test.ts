@@ -65,6 +65,9 @@ it("nextCheckAt mirrors the worker: interval after the last check, at least week
   expect(nextCheckAt({ ...base, series_status: "ongoing", next_retry_at: "2026-01-03T00:00:00.000Z" })).toBe("2026-01-02T00:00:00.000Z");
   expect(nextCheckAt({ ...base, series_status: "ongoing", check_retry_at: "2026-01-01T01:00:00.000Z",
     next_retry_at: "2026-01-01T02:00:00.000Z" })).toBe("2026-01-01T01:00:00.000Z");
+  // A failed check's backoff holds an earlier chapter retry back.
+  expect(nextCheckAt({ ...base, series_status: "ongoing", check_retry_at: "2026-01-01T03:00:00.000Z",
+    next_retry_at: "2026-01-01T02:00:00.000Z" })).toBe("2026-01-01T03:00:00.000Z");
 });
 
 describe("libraryView / fetchedPct", () => {

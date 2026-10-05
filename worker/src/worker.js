@@ -12,12 +12,14 @@ const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, ".."
 // (1h, 2h, 4h, 8h by default; the novel is checked as soon as a retry is due, not only on its interval);
 // after MAX_ATTEMPTS failures stop until `cli.js retry <id>`. A check that fails as a whole (TOC fetch)
 // backs off the same way, with no limit: once the wait passes the novel's interval, the interval wins.
+// Any single wait is capped at a week (an uncapped 2^n overflows Date after ~33 failures).
+const WEEK_MIN = 7 * 24 * 60;
 const retryPolicy = () => ({
     maxAttempts: Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5),
     retryBaseMin: Number(process.env.CHAPTERLY_RETRY_BASE_MIN || 60),
 });
 const nextRetryAt = (attempts, baseMin, at = Date.now()) =>
-    new Date(at + baseMin * 60_000 * 2 ** (attempts - 1)).toISOString();
+    new Date(at + Math.min(baseMin * 2 ** Math.min(attempts - 1, 30), WEEK_MIN) * 60_000).toISOString();
 
 const safeName = s => String(s || "Unknown").replace(/[/\\:*?"<>|\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 150);
 
@@ -66,6 +68,9 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
                 log(`[${id}]   ✗ ${c.url} (attempt ${attempts}/${maxAttempts}${retryAt ? `, retry after ${retryAt}` : ", giving up"}): ${e.message}`);
             }
         }
+        // Over the limit (e.g. CHAPTERLY_MAX_ATTEMPTS lowered) but still holding a retry_at: drop it, or the
+        // past retry_at would keep the novel due on every tick.
+        db.clearGaveUpRetries(id, maxAttempts);
         const gaveUp = db.gaveUpChapters(id, maxAttempts).length;
         error = [
             failed && `${failed} chapter(s) failed this check`,
@@ -113,17 +118,17 @@ async function buildEpub(db, scraper, id) {
     return file;
 }
 
-const WEEK_MIN = 7 * 24 * 60;
-
 /**
  * Due when active and: "check now" requested, the backoff of a failed check or chapter passed, never
- * checked, or the interval passed since the last start.
+ * checked, or the interval passed since the last start. While a failed check's backoff runs, chapter retries
+ * wait for it too (the site is likely down: don't refetch the TOC every tick).
  * Completed + every chapter fetched → never (only "check now"); dropped → at most weekly.
  */
 function isDue(n, at = Date.now()) {
     if (n.status !== "active") return false;
     if (n.check_requested_at) return true;
-    if ([n.check_retry_at, n.next_retry_at].some(t => t && Date.parse(t) <= at)) return true;
+    const retryAt = n.check_retry_at || n.next_retry_at;
+    if (retryAt && Date.parse(retryAt) <= at) return true;
     if (n.series_status === "completed" && n.chapters_total > 0 && n.chapters_fetched >= n.chapters_total) return false;
     const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
     return !n.last_checked_at || at - Date.parse(n.last_checked_at) >= intervalMin * 60_000;
@@ -135,7 +140,8 @@ async function checkDue(db, scraper, log = console.log, opts = {}) {
     const due = db.listNovels().filter(n => isDue(n))
         .sort((a, b) => Number(!!b.check_requested_at) - Number(!!a.check_requested_at));
     for (const n of due) {
-        await checkNovel(db, scraper, n, log, opts);
+        // checkNovel records its own errors; anything escaping it must not kill the worker (crash-loop).
+        try { await checkNovel(db, scraper, n, log, opts); } catch (e) { log(`[${n.id}] ✗ check crashed: ${e.stack || e}`); }
     }
 }
 
