@@ -14,9 +14,14 @@ README.md has the full setup, env vars and CLI.
 ## Scheduling and retries (worker/src/worker.js)
 - Worker ticks every `CHAPTERLY_TICK_MIN`; `isDue` decides. A novel is due on "check now", its interval
   (`check_interval_min`, default daily), a failed chapter's `retry_at`, or a failed check's `check_retry_at`.
-- Backoff for both chapters and whole checks: `RETRY_BASE_MIN × 2^(n-1)` (1h, 2h, 4h…). Chapters give up
-  after `CHAPTERLY_MAX_ATTEMPTS`; whole checks never give up (the interval takes over once the wait is longer).
+  While `check_retry_at` is pending, chapter retries wait for it (site down → no TOC fetch every tick).
+- Backoff for both chapters and whole checks: `RETRY_BASE_MIN × 2^(n-1)` (1h, 2h, 4h…), capped at 7 days.
+  Chapters give up after `CHAPTERLY_MAX_ATTEMPTS` (retry_at cleared); whole checks never give up (the interval
+  takes over once the wait is longer). An interrupted check (worker stopped mid-check) counts as a failed check:
+  resumed at once the first time, backed off if it's interrupted again.
 - `web/lib/view.ts nextCheckAt` mirrors `isDue` for display — change both together.
+- Heartbeat: `worker_status.seen_at`, stamped every tick and per chapter; the novel page warns when it's older
+  than 3 ticks (min 10 min; web reads `CHAPTERLY_TICK_MIN` too, so set it on both if you change it).
 - Per-request timeout `CHAPTERLY_FETCH_TIMEOUT_SEC` (default 120; got-scraping's own default is 60).
 
 ## Deploy
