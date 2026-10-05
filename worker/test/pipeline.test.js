@@ -7,7 +7,7 @@ const os = require("os");
 const path = require("path");
 const { createScraper } = require("../src/scraper");
 const { openDb } = require("../../shared/db");
-const { checkNovel, checkDue, buildEpub, isDue, nextRetryAt, resumeInterruptedChecks, syncSupportedSites } = require("../src/worker");
+const { checkNovel, checkDue, buildEpub, isDue, nextRetryAt, safeName, resumeInterruptedChecks, syncSupportedSites } = require("../src/worker");
 const { mockSite, BASE } = require("./mockSite");
 const { CLEAN_VERSION } = require("../src/clean");
 
@@ -39,6 +39,16 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.strictEqual(epubChapters(epub).size, 5);
     assert.match(epub.toString("latin1"), /OEBPS\/Images\/\S+?\.jpe?g/, "cover image embedded");
     assert.deepStrictEqual(fs.readdirSync(path.dirname(n.epub_path)), ["Test Story.epub"], "no temp file left behind");
+
+    // Library path segments: no escaping the folder, no hidden/empty names, NAME_MAX counted in bytes.
+    assert.deepStrictEqual(["..", " . ", "", null, ".hidden", "a/b"].map(safeName), ["Unknown", "Unknown", "Unknown", "Unknown", "hidden", "a_b"]);
+    assert.strictEqual(safeName("章".repeat(200)), "章".repeat(60), "180 bytes, whole characters only");
+    // Same author + title as another novel: its own folder and EPUB, never overwriting the first one.
+    const twin = db.addNovel(`${BASE}?twin`).id;
+    await checkNovel(db, createScraper({ fetch: url => site.fetch(String(url).replace("?twin", "")) }), db.getNovel(twin), quiet);
+    assert.strictEqual(db.getNovel(twin).epub_path,
+        path.join(tmp, "library", "Jane Placeholder", `Test Story (#${twin})`, `Test Story (#${twin}).epub`));
+    assert.deepStrictEqual(fs.readdirSync(path.dirname(n.epub_path)), ["Test Story.epub"], "first novel's EPUB untouched");
 
     // A chapter stored under older cleaning rules (here: with the site's repeated "Chapter N" <h2>) is
     // cleaned again when the EPUB is built, and the result is kept for the reader too.

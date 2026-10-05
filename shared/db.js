@@ -76,6 +76,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             if (error) run("UPDATE novels SET last_error = ?, check_finished_at = ? WHERE id = ?", error, now(), id);
             else run("UPDATE novels SET last_error = NULL, last_success_at = ?, check_finished_at = ? WHERE id = ?", now(), now(), id);
         },
+        epubPathTaken: (epubPath, exceptId) =>
+            !!one("SELECT 1 AS x FROM novels WHERE epub_path = ? AND id != ?", epubPath, exceptId),
         markEpubBuilt: (id, epubPath) =>
             run("UPDATE novels SET epub_path = ?, epub_built_at = ? WHERE id = ?", epubPath, now(), id),
 

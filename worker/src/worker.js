@@ -21,7 +21,20 @@ const retryPolicy = () => ({
 const nextRetryAt = (attempts, baseMin, at = Date.now()) =>
     new Date(at + Math.min(baseMin * 2 ** Math.min(attempts - 1, 30), WEEK_MIN) * 60_000).toISOString();
 
-const safeName = s => String(s || "Unknown").replace(/[/\\:*?"<>|\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 150);
+/**
+ * One path segment: no separators/control chars, no leading dots ("..", hidden files), never empty, and at most
+ * 180 UTF-8 bytes (NAME_MAX is 255 bytes, not characters: CJK titles are 3 bytes each) so "<name> (#id).epub" fits.
+ */
+function safeName(s) {
+    const name = String(s ?? "").replace(/[/\\:*?"<>|\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim()
+        .replace(/^\.+/, "").trim() || "Unknown";
+    let out = "";
+    for (const ch of name) {   // by code point, so a character is never cut in half
+        if (Buffer.byteLength(out + ch) > 180) break;
+        out += ch;
+    }
+    return out.trim();
+}
 
 /**
  * One check of one novel: refresh the TOC, fetch pending chapters one by one, rebuild the EPUB.
@@ -109,9 +122,13 @@ async function buildEpub(db, scraper, id) {
         chapters.map(c => ({ url: c.url, title: c.title, html: c.html })));
     // Keep the first path forever, even if the site later renames the novel,
     // so Audiobookshelf keeps treating it as the same item (and keeps reading progress).
-    const file = n.epub_path || path.join(LIBRARY(), safeName(n.author), safeName(n.title), `${safeName(n.title)}.epub`);
+    const pathFor = name => path.join(LIBRARY(), safeName(n.author), name, `${name}.epub`);
+    let file = n.epub_path || pathFor(safeName(n.title));
+    // Same author + title as another novel: don't overwrite its EPUB.
+    if (!n.epub_path && db.epubPathTaken(file, id)) file = pathFor(`${safeName(n.title)} (#${id})`);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp`);
+    // pid: a CLI build and the worker may write the same novel at once.
+    const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
     fs.writeFileSync(tmp, buf);
     fs.renameSync(tmp, file);   // atomic on the same filesystem: readers never see a half-written file
     db.markEpubBuilt(id, file);
@@ -170,4 +187,4 @@ async function runLoop(db, scraper, { tickMin = Number(process.env.CHAPTERLY_TIC
     }
 }
 
-module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt, syncSupportedSites, resumeInterruptedChecks };
+module.exports = { checkNovel, checkDue, buildEpub, runLoop, isDue, nextRetryAt, safeName, syncSupportedSites, resumeInterruptedChecks };
