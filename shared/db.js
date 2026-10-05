@@ -116,9 +116,9 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                 html, cleanVersion, now(), id),
         failChapter: (id, error, retryAt) =>
             run("UPDATE chapters SET error = ?, attempts = attempts + 1, retry_at = ? WHERE id = ?", error, retryAt, id),
-        /** Chapter list page without html (novels can have thousands of chapters). Newest first. */
+        /** Chapter list page without html (novels can have thousands of chapters). Reading order, like the reader. */
         chapterPage: (novelId, limit, offset) =>
-            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? ORDER BY idx DESC, id DESC LIMIT ? OFFSET ?`,
+            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? ORDER BY idx, id LIMIT ? OFFSET ?`,
                 novelId, limit, offset),
         chapterCount: novelId => one("SELECT COUNT(*) AS n FROM chapters WHERE novel_id = ?", novelId).n,
         failingChapters: novelId =>

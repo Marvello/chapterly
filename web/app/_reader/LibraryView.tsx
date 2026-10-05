@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
+import { Plus } from "lucide-react";
 import AddNovelForm from "@/components/AddNovelForm";
+import ContinueShelf from "@/components/ContinueShelf";
 import Header from "@/components/Header";
 import LibraryControls from "@/components/LibraryControls";
 import NovelPosters from "@/components/NovelPosters";
@@ -38,21 +40,36 @@ export default function LibraryView({ rev, notice, resync }: { rev: number; noti
     return () => clearInterval(t);
   }, [busy, isOnline, resync]);
 
+  // The add form hides behind "+", except in an empty library where adding is the only thing to do.
+  const [adding, setAdding] = useState(false);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const showAdd = adding || all?.length === 0;
+  const closeAdd = useCallback(() => { setAdding(false); addButton.current?.focus(); }, []);
+
   const query = parseLibraryQuery(Object.fromEntries(params));
   const novels = all ? queryLibrary(all, query) : [];
 
   return (
     <main className="mx-auto max-w-6xl p-4">
       <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 border-b border-edge bg-page px-4 pt-4">
-        <Header signOut={isOnline} />
-        {isOnline
-          ? <AddNovelForm onAdded={resync} />
-          : <p className="mb-4 text-sm text-tmuted">Offline: showing the novels saved on this device.</p>}
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1"><Header signOut={isOnline} /></div>
+          {isOnline && all?.length !== 0 && (
+            <button ref={addButton} type="button" onClick={() => setAdding(a => !a)} aria-expanded={showAdd} aria-controls="add-novel"
+              className="flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-sm font-medium text-page">
+              <Plus className="size-4" /> <span className="sr-only sm:not-sr-only">Add novel</span>
+            </button>
+          )}
+        </div>
+        {!isOnline
+          ? <p className="mb-4 text-sm text-tmuted">Offline: showing the novels saved on this device.</p>
+          : showAdd && <AddNovelForm id="add-novel" onAdded={resync} onClose={closeAdd} />}
       </div>
       {notice && <p className="mb-3 rounded-lg border border-warn px-3 py-2 text-sm text-warn">{notice}</p>}
       {all === null ? null : all.length === 0
         ? <p className="text-tmuted">{isOnline ? "No novels yet. Paste a novel's table-of-contents URL above." : "Nothing saved on this device yet. Connect once to load your library."}</p>
         : <>
+          {!query.q && query.filter === "all" && <ContinueShelf novels={all} />}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="min-w-0 flex-1"><LibraryControls query={query} /></div>
             <ViewToggle />

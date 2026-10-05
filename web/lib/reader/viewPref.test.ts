@@ -17,3 +17,12 @@ it("library layout is remembered per device, defaults to overview, ignores junk"
   expect(createViewPref(storage).get()).toBe("overview");
   off();
 });
+
+it("defaults to posters on a phone until a layout is chosen; the server still renders overview", () => {
+  const storage = memory();
+  const pref = createViewPref(storage, () => true);
+  expect([pref.get(), pref.getServer()]).toEqual(["posters", "overview"]);
+  pref.set("table");
+  expect(createViewPref(storage, () => true).get()).toBe("table");
+  expect(createViewPref(memory(), () => false).get()).toBe("overview");
+});

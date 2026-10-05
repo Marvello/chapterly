@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
+import { continueReading, coverHue, displayTitle, fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -27,7 +27,27 @@ describe("novelStatus", () => {
   });
 });
 
-it("sortLibrary: new chapters first, then title (url when no title)", () => {
+it("displayTitle: title, else the TOC URL's hostname, else the raw URL", () => {
+  expect(displayTitle(row({ title: "Name" }))).toBe("Name");
+  expect(displayTitle(row({ title: null, toc_url: "https://www.site.com/novel/1" }))).toBe("www.site.com");
+  expect(displayTitle(row({ title: "", toc_url: "not a url" }))).toBe("not a url");
+});
+
+it("continueReading: started novels only, most recently read first, capped", () => {
+  const n = (id: number, progress_chapter_id: number | null, read_at: string | null) => ({ id, progress_chapter_id, read_at });
+  const rows = [n(1, 10, "2026-01-01"), n(2, null, null), n(3, 30, "2026-03-01"), n(4, 40, "2026-02-01")];
+  expect(continueReading(rows).map(r => r.id)).toEqual([3, 4, 1]);
+  expect(continueReading(rows, 2).map(r => r.id)).toEqual([3, 4]);
+  expect(continueReading([n(5, null, null)])).toEqual([]);
+});
+
+it("coverHue: stable per title, within 0–359", () => {
+  expect(coverHue("Mother of Learning")).toBe(coverHue("Mother of Learning"));
+  expect(coverHue("A")).not.toBe(coverHue("B"));
+  for (const t of ["", "x", "長い題名", "a".repeat(500)]) expect(coverHue(t)).toSatisfy((h: number) => h >= 0 && h < 360);
+});
+
+it("sortLibrary: new chapters first, then title (hostname when no title)", () => {
   const sorted = sortLibrary([row({ id: 1, title: "zeta" }), row({ id: 2, title: null, toc_url: "https://a" }), row({ id: 3, title: "z", chapters_new: 2 })]);
   expect(sorted.map(r => r.id)).toEqual([3, 2, 1]);
 });

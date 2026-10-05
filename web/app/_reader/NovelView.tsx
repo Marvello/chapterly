@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowLeft, CloudOff, Download, Settings2 } from "lucide-react";
-import type { ReaderNovel, TocEntry } from "@/lib/db";
+import { ArrowLeft, Download, Settings2 } from "lucide-react";
+import Cover from "@/components/Cover";
+import type { LibraryNovel, TocEntry } from "@/lib/db";
 import { go, runSync } from "@/lib/reader/client";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
@@ -11,12 +12,14 @@ import { chapterLabel } from "@/lib/reader/label";
 import { online } from "@/lib/reader/online";
 import { chapterState, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import type { Position } from "@/lib/reader/types";
+import { displayTitle } from "@/lib/view";
 
-type State = { novel?: ReaderNovel; toc: TocEntry[]; cached: Set<number>; saved: Position | null; pinned: boolean };
+type State = { novel?: LibraryNovel; toc: TocEntry[]; cached: Set<number>; saved: Position | null; pinned: boolean };
 
 async function readState(novelId: number): Promise<State> {
   const store = idbStore();
-  const novel = (await store.getLibrary())?.find(n => n.id === novelId);
+  // The API returns full library rows; the store is typed with the reader's subset of them (as in LibraryView).
+  const novel = ((await store.getLibrary()) as LibraryNovel[] | undefined)?.find(n => n.id === novelId);
   let toc = await store.getToc(novelId);
   if (!toc && navigator.onLine) {
     try { toc = await httpApi.toc(novelId); await store.setToc(novelId, toc); } catch { /* shown as "connect once" */ }
@@ -42,6 +45,8 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
   if (!state) return null;
   const { novel, toc, cached, saved, pinned } = state;
   const start = saved?.chapterId ?? toc[0]?.id;
+  const title = novel ? displayTitle(novel) : "Novel";
+  const offline = toc.filter(c => cached.has(c.id)).length;
 
   const togglePin = async () => {
     await idbStore().setPin(novelId, !pinned);
@@ -51,11 +56,18 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
 
   return (
     <main className="mx-auto max-w-2xl p-4">
-      <header className="mb-4 flex items-center gap-2">
-        <button onClick={() => go("/")} aria-label="Back" className="text-tmuted hover:text-tprimary"><ArrowLeft className="size-5" /></button>
-        <h1 className="truncate text-lg font-semibold text-tprimary">{novel?.title ?? "Novel"}</h1>
+      <button onClick={() => go("/")} className="mb-3 flex items-center gap-1 text-sm text-tmuted hover:text-tprimary">
+        <ArrowLeft className="size-4" /> Library
+      </button>
+      <header className="mb-4 flex gap-4">
+        <Cover url={novel?.cover_url ?? null} title={title} className="h-36 w-24 shrink-0 rounded text-sm" />
+        <div className="min-w-0 space-y-1">
+          <h1 className="font-serif text-2xl font-semibold leading-tight text-tprimary">{title}</h1>
+          {novel?.author && <p className="text-tmuted">{novel.author}</p>}
+          {novel?.description && <p className="line-clamp-4 text-sm text-tsecondary">{novel.description}</p>}
+        </div>
       </header>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-2 flex flex-wrap gap-2">
         {start && (
           <button onClick={() => go(`/?novel=${novelId}&chapter=${start}`)}
             className="rounded-lg bg-accent px-4 py-2 font-medium text-page">{saved ? "Continue" : "Start reading"}</button>
@@ -71,8 +83,9 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
           </Link>
         )}
       </div>
+      {toc.length > 0 && <p className="mb-4 text-sm text-tmuted">{offline} of {toc.length} chapters offline</p>}
       {toc.length === 0
-        ? <p className="text-tmuted">This novel isn&apos;t on the phone yet. Connect once to load it.</p>
+        ? <p className="mt-4 text-tmuted">This novel isn&apos;t on the phone yet. Connect once to load it.</p>
         : (
           <ol className="divide-y divide-edge rounded-xl border border-edge bg-component">
             {toc.map(c => {
@@ -80,11 +93,10 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
               return (
                 <li key={c.id} ref={c.id === saved?.chapterId ? current : undefined}
                   style={{ contentVisibility: "auto", containIntrinsicSize: "auto 44px" }}>
-                  <button onClick={() => go(`/?novel=${novelId}&chapter=${c.id}`)}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm ${
+                  <button onClick={() => go(`/?novel=${novelId}&chapter=${c.id}`)} aria-current={s === "current" || undefined}
+                    className={`block w-full truncate px-3 py-2.5 text-left text-sm ${
                       s === "read" ? "text-tmuted" : s === "current" ? "text-accent" : "font-medium text-tprimary"}`}>
-                    <span className="truncate">{chapterLabel(c)}</span>
-                    {!cached.has(c.id) && <CloudOff className="size-3.5 shrink-0 text-tmuted" aria-label="Not downloaded" />}
+                    {chapterLabel(c)}
                   </button>
                 </li>
               );
