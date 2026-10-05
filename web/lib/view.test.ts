@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { coverHue, displayTitle, fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
+import { continueReading, coverHue, displayTitle, fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -31,6 +31,14 @@ it("displayTitle: title, else the TOC URL's hostname, else the raw URL", () => {
   expect(displayTitle(row({ title: "Name" }))).toBe("Name");
   expect(displayTitle(row({ title: null, toc_url: "https://www.site.com/novel/1" }))).toBe("www.site.com");
   expect(displayTitle(row({ title: "", toc_url: "not a url" }))).toBe("not a url");
+});
+
+it("continueReading: started novels only, most recently read first, capped", () => {
+  const n = (id: number, progress_chapter_id: number | null, read_at: string | null) => ({ id, progress_chapter_id, read_at });
+  const rows = [n(1, 10, "2026-01-01"), n(2, null, null), n(3, 30, "2026-03-01"), n(4, 40, "2026-02-01")];
+  expect(continueReading(rows).map(r => r.id)).toEqual([3, 4, 1]);
+  expect(continueReading(rows, 2).map(r => r.id)).toEqual([3, 4]);
+  expect(continueReading([n(5, null, null)])).toEqual([]);
 });
 
 it("coverHue: stable per title, within 0–359", () => {

@@ -1,4 +1,4 @@
-import type { LibraryRow, NovelRow } from "./db";
+import type { LibraryRow, NovelRow, ReaderNovel } from "./db";
 
 export type Status = "paused" | "fetching_info" | "checking" | "error" | "active";
 
@@ -31,6 +31,12 @@ export function displayTitle(n: Pick<NovelRow, "title" | "toc_url">): string {
   if (n.title) return n.title;
   try { return new URL(n.toc_url).hostname || n.toc_url; } catch { return n.toc_url; }
 }
+
+/** "Continue reading" shelf: started novels, most recently read first. */
+export const continueReading = <T extends Pick<ReaderNovel, "progress_chapter_id" | "read_at">>(rows: T[], max = 6): T[] =>
+  rows.filter(n => n.progress_chapter_id != null)
+    .sort((a, b) => (b.read_at ?? "").localeCompare(a.read_at ?? ""))
+    .slice(0, max);
 
 /** Stable hue (0–359) for a title's placeholder cover. */
 export function coverHue(title: string): number {

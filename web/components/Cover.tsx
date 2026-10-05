@@ -8,7 +8,7 @@ export default function Cover({ url, title, className = "" }: { url: string | nu
   return (
     <div aria-hidden className={`flex items-center justify-center overflow-hidden p-1.5 ${className}`}
       style={{ background: `hsl(${coverHue(title)} 35% 30%)` }}>
-      <span className="line-clamp-4 break-words text-center font-serif leading-tight text-white">{title}</span>
+      <span className="line-clamp-4 break-words hyphens-auto text-center font-serif leading-tight text-white">{title}</span>
     </div>
   );
 }
