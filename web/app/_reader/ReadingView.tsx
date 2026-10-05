@@ -179,7 +179,8 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     if (!cur) return;
     const entry = toc.find(c => c.id === cur.chapterId);
     if (entry) setChapterTitle(chapterLabel(entry));
-    if (new URLSearchParams(window.location.search).get("chapter") !== String(cur.chapterId)) {
+    const inUrl = new URLSearchParams(window.location.search).get("chapter");
+    if (inUrl && inUrl !== String(cur.chapterId)) {   // no chapter: we're being left (track at unmount)
       window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${cur.chapterId}`);
     }
     const d = decide(cur, saved.current);
@@ -202,6 +203,9 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     document.addEventListener("visibilitychange", onHide);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onHide); };
   }, [track]);
+  // Leaving (Back, system back): save the spot reached since the last 5 s tick. A layout cleanup runs
+  // while the chapters are still in the DOM.
+  useLayoutEffect(() => () => { track(); }, [track]);
 
   useEffect(() => {
     let last = window.scrollY;
