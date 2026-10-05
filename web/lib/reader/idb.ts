@@ -105,3 +105,16 @@ export function idbStore(): ReaderStore {
     },
   };
 }
+
+/** Sign-out: drop what this user left on the device (library, chapters, unsent progress), so the next
+ * user neither sees it nor sends that progress under their own account. */
+export async function deleteReaderDb() {
+  const db = await opened?.catch(() => null);
+  opened = null;
+  db?.close();
+  await new Promise<void>(resolve => {
+    const req = indexedDB.deleteDatabase(DB);
+    // blocked: an old tab still holds it; the delete then completes as soon as that tab lets go.
+    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+  });
+}
