@@ -7,6 +7,7 @@ import NovelPosters from "@/components/NovelPosters";
 import NovelRow from "@/components/NovelRow";
 import NovelTable from "@/components/NovelTable";
 import ViewToggle from "@/components/ViewToggle";
+import { currentUserId } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { VIEW_COOKIE, libraryView, newSince, novelStatus, parseLibraryQuery, queryLibrary } from "@/lib/view";
 
@@ -15,7 +16,9 @@ export const dynamic = "force-dynamic";
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const view = libraryView((await cookies()).get(VIEW_COOKIE)?.value);
   const query = parseLibraryQuery(await searchParams);
-  const all = getDb().listNovels(newSince());
+  const uid = await currentUserId();
+  const unread = new Map(uid ? getDb().readerLibrary(uid).filter(r => r.progress_chapter_id !== null).map(r => [r.id, r.unread]) : []);
+  const all = getDb().listNovels(newSince()).map(n => ({ ...n, unread: unread.get(n.id) ?? null }));
   const novels = queryLibrary(all, query);
   // Only while the worker is actually on it (any novel, shown or not); gave-up chapters leave fetched < total forever.
   const live = all.some(n => ["fetching_info", "checking"].includes(novelStatus(n)));

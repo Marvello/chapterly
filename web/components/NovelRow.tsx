@@ -23,6 +23,7 @@ export default function NovelRow({ novel: n }: { novel: LibraryRow }) {
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-tmuted">
             <span className="tabular-nums">{n.chapters_fetched}/{n.chapters_total} chapters</span>
             {n.chapters_new > 0 && <span className="rounded bg-accent px-1.5 font-medium text-page">+{n.chapters_new} new</span>}
+            {!!n.unread && <span className="rounded border border-accent px-1.5 font-medium text-accent">{n.unread} unread</span>}
             {n.chapters_failing > 0 && <span className="text-critical">{n.chapters_failing} failing</span>}
             {n.series_status !== "ongoing" && <span className="rounded border border-edge px-1.5">{n.series_status}</span>}
             <span>checked {relativeTime(n.last_checked_at)}</span>

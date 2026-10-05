@@ -1,14 +1,16 @@
 /* eslint-disable @next/next/no-img-element -- remote cover from the novel's site */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, Check, Clock, ExternalLink, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { AlertTriangle, BookOpenText, Check, Clock, ExternalLink, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { checkNowAction, retryAction, setStatusAction } from "@/app/actions";
 import AutoRefresh from "@/components/AutoRefresh";
 import DeleteButton from "@/components/DeleteButton";
+import EpubToggle from "@/components/EpubToggle";
 import Header from "@/components/Header";
 import IntervalSelect from "@/components/IntervalSelect";
 import SeriesStatusSelect from "@/components/SeriesStatusSelect";
 import StatusBadge from "@/components/StatusBadge";
+import { currentUserId } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { parseId } from "@/lib/validate";
 import { displayTitle, isChecking, isSeriesDone, nextCheckAt, novelStatus, relativeTime } from "@/lib/view";
@@ -32,6 +34,9 @@ export default async function NovelPage({ params, searchParams }:
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
   const counts = db.listNovels().find(r => r.id === n.id);
+  const uid = await currentUserId();
+  const reading = uid ? db.readerLibrary(uid).find(r => r.id === n.id) : undefined;
+  const unread = reading?.progress_chapter_id != null ? reading.unread : null;
   const nextCheck = nextCheckAt(counts ?? n);
   const done = counts ? isSeriesDone(counts) : false;
   const idField = <input type="hidden" name="id" value={n.id} />;
@@ -65,6 +70,9 @@ export default async function NovelPage({ params, searchParams }:
       </section>
 
       <section className="mb-6 flex flex-wrap items-center gap-2">
+        <Link href={`/read?novel=${n.id}`} className={btn}>
+          <BookOpenText className="size-4" /> Read{unread ? ` · ${unread} unread` : ""}
+        </Link>
         {n.status === "active" && (
           <form action={checkNowAction}>{idField}
             <button className={btn} disabled={isChecking(n)}><RefreshCw className="size-4" /> Check now</button>
@@ -76,6 +84,7 @@ export default async function NovelPage({ params, searchParams }:
         </form>
         <IntervalSelect id={n.id} minutes={n.check_interval_min} />
         <SeriesStatusSelect id={n.id} status={n.series_status} manual={!!n.series_status_manual} />
+        <EpubToggle id={n.id} on={!!n.epub_enabled} />
         <DeleteButton id={n.id} />
       </section>
 

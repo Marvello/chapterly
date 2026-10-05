@@ -18,6 +18,9 @@ export default function NovelPosters({ novels }: { novels: LibraryRow[] }) {
                 {n.chapters_new > 0 && (
                   <span className="absolute right-1 top-1 rounded bg-accent px-1 text-xs font-medium text-page">+{n.chapters_new}</span>
                 )}
+                {!!n.unread && (
+                  <span className="absolute left-1 top-1 rounded border border-accent bg-page px-1 text-xs font-medium text-accent">{n.unread}</span>
+                )}
               </div>
               <div className="h-1 bg-edge">
                 <div className={`h-full ${error ? "bg-critical" : "bg-accent"}`} style={{ width: `${error ? 100 : fetchedPct(n)}%` }} />

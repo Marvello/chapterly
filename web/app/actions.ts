@@ -80,3 +80,8 @@ export async function setViewAction(form: FormData) {
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
 }
+
+export async function setEpubAction(form: FormData) {
+  const on = form.get("epub") === "on";
+  await withNovel(form, id => getDb().setEpubEnabled(id, on));
+}

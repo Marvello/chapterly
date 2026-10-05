@@ -27,6 +27,7 @@ export default function NovelTable({ novels }: { novels: LibraryRow[] }) {
               <td className="px-3 py-2 tabular-nums text-tmuted">
                 {n.chapters_fetched}/{n.chapters_total}
                 {n.chapters_new > 0 && <span className="ml-1.5 rounded bg-accent px-1 text-xs font-medium text-page">+{n.chapters_new}</span>}
+                {!!n.unread && <span className="ml-1.5 whitespace-nowrap rounded border border-accent px-1 text-xs font-medium text-accent">{n.unread} unread</span>}
                 {n.chapters_failing > 0 && <span className="ml-1.5 text-xs text-critical">{n.chapters_failing}✗</span>}
               </td>
               <td className="hidden px-3 py-2 text-tmuted sm:table-cell">{relativeTime(n.last_checked_at)}</td>
