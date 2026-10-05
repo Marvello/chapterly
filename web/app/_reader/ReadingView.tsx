@@ -9,6 +9,7 @@ import { go, runSync } from "@/lib/reader/client";
 import { fetchChapter } from "@/lib/reader/fetchChapter";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
+import { chapterLabel } from "@/lib/reader/label";
 import { decide, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import { positionFromScroll } from "@/lib/reader/scroll";
 import { THEMES, settingsStore, type ReaderSettings } from "@/lib/reader/settings";
@@ -69,7 +70,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
       if (fresh !== list) setToc(fresh);
       restoreTo.current = { chapterId: entry.id, fraction };
       setBlocks([block]);
-      setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
+      setChapterTitle(chapterLabel(entry));
     } catch (e) {
       onLoadError(e);
     }
@@ -174,7 +175,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     const cur = currentPosition();
     if (!cur) return;
     const entry = toc.find(c => c.id === cur.chapterId);
-    if (entry) setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
+    if (entry) setChapterTitle(chapterLabel(entry));
     if (new URLSearchParams(window.location.search).get("chapter") !== String(cur.chapterId)) {
       window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${cur.chapterId}`);
     }
@@ -268,13 +269,13 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
         {toc.length === 0 && <p className="opacity-70">This novel isn&apos;t on the phone yet. Connect once to load it.</p>}
         {prev && (
           <button onClick={() => openAt(prev, toc)} className="mb-8 block text-sm opacity-70 underline">
-            ← {prev.title ?? `Chapter ${prev.idx}`}
+            ← {chapterLabel(prev)}
           </button>
         )}
         {blocks.map(b => (
           <article key={b.id} data-chapter={b.id} data-idx={b.idx} className="reader-content mb-16">
             {b.html === null
-              ? <p className="opacity-70">{b.title ?? `Chapter ${b.idx}`}: not downloaded. Connect to load it.</p>
+              ? <p className="opacity-70">{chapterLabel(b)}: not downloaded. Connect to load it.</p>
               : <div dangerouslySetInnerHTML={{ __html: b.html }} />}
           </article>
         ))}
@@ -286,7 +287,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
         <div className="fixed inset-x-2 bottom-3 z-20 mx-auto max-w-xl rounded-xl p-3 text-sm shadow-lg"
           style={{ background: theme.background, border: "1px solid rgba(127,127,127,.35)" }} role="status">
           <div className="mb-2 flex items-start justify-between gap-2">
-            <p>Your progress is at {toc.find(c => c.id === banner.chapterId)?.title ?? `Chapter ${banner.idx}`} ({Math.round(banner.fraction * 100)}%).</p>
+            <p>Your progress is at {chapterLabel(toc.find(c => c.id === banner.chapterId) ?? banner)} ({Math.round(banner.fraction * 100)}%).</p>
             <button onClick={() => { dismissed.current = true; setBanner(null); }} aria-label="Dismiss"><X className="size-4" /></button>
           </div>
           <div className="flex gap-2">

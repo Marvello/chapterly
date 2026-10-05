@@ -7,6 +7,7 @@ import type { ReaderNovel, TocEntry } from "@/lib/db";
 import { go, runSync } from "@/lib/reader/client";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
+import { chapterLabel } from "@/lib/reader/label";
 import { online } from "@/lib/reader/online";
 import { chapterState, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import type { Position } from "@/lib/reader/types";
@@ -82,7 +83,7 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
                   <button onClick={() => go(`/?novel=${novelId}&chapter=${c.id}`)}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm ${
                       s === "read" ? "text-tmuted" : s === "current" ? "text-accent" : "font-medium text-tprimary"}`}>
-                    <span className="truncate">{c.title ?? `Chapter ${c.idx}`}</span>
+                    <span className="truncate">{chapterLabel(c)}</span>
                     {!cached.has(c.id) && <CloudOff className="size-3.5 shrink-0 text-tmuted" aria-label="Not downloaded" />}
                   </button>
                 </li>
