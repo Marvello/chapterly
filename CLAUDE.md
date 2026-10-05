@@ -20,7 +20,8 @@ README.md has the full setup, env vars and CLI.
 - Per-request timeout `CHAPTERLY_FETCH_TIMEOUT_SEC` (default 120; got-scraping's own default is 60).
 
 ## Deploy
-Runs on tower (homeserver); deploy steps and paths are in `../common-tech/memory/homeserver/app-chapterly.md`.
+Runs on the turing k3s cluster (homeserver) from the CI-built ghcr images; worker + web share one pod and one
+SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapterly.md`.
 
 ## Library + reader (web/app/_reader, web/lib/reader)
 - `/` is one client-rendered page (library, novel, reading views; `/read` redirects there); views switch by
