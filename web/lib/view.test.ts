@@ -7,7 +7,8 @@ const row = (o: Partial<LibraryRow>): LibraryRow => ({
   description: null, cover_url: null, status: "active", check_interval_min: 1440, last_checked_at: null,
   last_success_at: null, last_error: null, epub_path: null, epub_built_at: null, created_at: "",
   check_requested_at: null, check_finished_at: null, series_status: "ongoing", series_status_manual: 0,
-  chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, last_fetched_at: null, ...o,
+  check_failures: 0, check_retry_at: null,
+  chapters_total: 0, chapters_fetched: 0, chapters_failing: 0, chapters_new: 0, last_fetched_at: null, next_retry_at: null, ...o,
 });
 
 describe("novelStatus", () => {
@@ -59,6 +60,11 @@ it("nextCheckAt mirrors the worker: interval after the last check, at least week
   expect(nextCheckAt({ ...base, series_status: "dropped" })).toBe("2026-01-08T00:00:00.000Z");
   expect(nextCheckAt({ ...base, series_status: "dropped", check_interval_min: 20160 })).toBe("2026-01-15T00:00:00.000Z");
   expect(nextCheckAt({ ...base, last_checked_at: null, series_status: "ongoing" })).toBeNull();
+  // A failed chapter's retry pulls the next check forward, never back.
+  expect(nextCheckAt({ ...base, series_status: "ongoing", next_retry_at: "2026-01-01T02:00:00.000Z" })).toBe("2026-01-01T02:00:00.000Z");
+  expect(nextCheckAt({ ...base, series_status: "ongoing", next_retry_at: "2026-01-03T00:00:00.000Z" })).toBe("2026-01-02T00:00:00.000Z");
+  expect(nextCheckAt({ ...base, series_status: "ongoing", check_retry_at: "2026-01-01T01:00:00.000Z",
+    next_retry_at: "2026-01-01T02:00:00.000Z" })).toBe("2026-01-01T01:00:00.000Z");
 });
 
 describe("libraryView / fetchedPct", () => {

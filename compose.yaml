@@ -20,6 +20,7 @@ services:
       CHAPTERLY_ABS_LIBRARY: ${CHAPTERLY_ABS_LIBRARY:-}
       # CHAPTERLY_TICK_MIN: 1          # how often the worker looks for due novels / "check now"
       # CHAPTERLY_RETRY_BASE_MIN: 60
+      # CHAPTERLY_FETCH_TIMEOUT_SEC: 120 # per HTTP request; a timeout counts as a failed attempt
     extra_hosts:
       - "host.docker.internal:host-gateway"   # reach services published on the host (e.g. Audiobookshelf)
     volumes:

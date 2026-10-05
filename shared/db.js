@@ -41,7 +41,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
             SELECT n.*, COUNT(c.id) AS chapters_total, COUNT(c.html) AS chapters_fetched,
                    COALESCE(SUM(CASE WHEN c.html IS NULL AND c.attempts > 0 THEN 1 ELSE 0 END), 0) AS chapters_failing,
                    COALESCE(SUM(CASE WHEN c.fetched_at >= ? THEN 1 ELSE 0 END), 0) AS chapters_new,
-                   MAX(c.fetched_at) AS last_fetched_at
+                   MAX(c.fetched_at) AS last_fetched_at,
+                   MIN(CASE WHEN c.html IS NULL THEN c.retry_at END) AS next_retry_at
             FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id
             GROUP BY n.id ORDER BY n.id`, newSince),
         /** Active novels whose last check started but never finished (worker stopped mid-check) → "check now". */
@@ -67,7 +68,11 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         /** Record the start of a check (the next one is due `interval` after this start); consumes a "check now". */
         markCheckStarted: id =>
             run("UPDATE novels SET last_checked_at = ?, check_requested_at = NULL WHERE id = ?", now(), id),
-        markCheckDone(id, error) {
+        /** checkRetryAt: set when the whole check failed (counts a check failure); null resets the count. */
+        markCheckDone(id, error, checkRetryAt = null) {
+            run(`UPDATE novels SET check_retry_at = ?,
+                 check_failures = CASE WHEN ? IS NULL THEN 0 ELSE check_failures + 1 END WHERE id = ?`,
+                checkRetryAt, checkRetryAt, id);
             if (error) run("UPDATE novels SET last_error = ?, check_finished_at = ? WHERE id = ?", error, now(), id);
             else run("UPDATE novels SET last_error = NULL, last_success_at = ?, check_finished_at = ? WHERE id = ?", now(), now(), id);
         },

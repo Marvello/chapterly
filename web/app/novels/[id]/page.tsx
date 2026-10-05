@@ -31,8 +31,8 @@ export default async function NovelPage({ params, searchParams }:
   const failing = db.failingChapters(n.id);
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
-  const nextCheck = nextCheckAt(n);
   const counts = db.listNovels().find(r => r.id === n.id);
+  const nextCheck = nextCheckAt(counts ?? n);
   const done = counts ? isSeriesDone(counts) : false;
   const idField = <input type="hidden" name="id" value={n.id} />;
 

@@ -11,10 +11,11 @@ export interface NovelRow {
   epub_path: string | null; epub_built_at: string | null; created_at: string;
   check_requested_at: string | null; check_finished_at: string | null;
   series_status: "ongoing" | "completed" | "dropped"; series_status_manual: 0 | 1;
+  check_failures: number; check_retry_at: string | null;
 }
 export interface LibraryRow extends NovelRow {
   chapters_total: number; chapters_fetched: number; chapters_failing: number; chapters_new: number;
-  last_fetched_at: string | null;
+  last_fetched_at: string | null; next_retry_at: string | null;
 }
 export interface ChapterRow {
   id: number; idx: number; url: string; title: string | null; fetched_at: string | null;

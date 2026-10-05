@@ -17,6 +17,7 @@
 //   node cli.js check   <tocUrl> <known.json>    list chapters not in known.json (a saved `info` output)
 // Env: CHAPTERLY_DB (default data/chapterly.db), CHAPTERLY_LIBRARY (default library/), CHAPTERLY_COOKIE, CHAPTERLY_UA,
 //      CHAPTERLY_MAX_ATTEMPTS (5), CHAPTERLY_RETRY_BASE_MIN (60: chapter retry backoff 1h, 2h, 4h, 8h),
+//      CHAPTERLY_FETCH_TIMEOUT_SEC (120: give up on a single HTTP request after this long),
 //      CHAPTERLY_ABS_URL / _TOKEN / _LIBRARY (ask Audiobookshelf to rescan after each EPUB update)
 "use strict";
 const fs = require("fs");

@@ -8,7 +8,9 @@ const { createAbsNotifier, absConfigFromEnv } = require("./audiobookshelf");
 
 const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
-// (1h, 2h, 4h, 8h by default); after MAX_ATTEMPTS failures stop until `cli.js retry <id>`.
+// (1h, 2h, 4h, 8h by default; the novel is checked as soon as a retry is due, not only on its interval);
+// after MAX_ATTEMPTS failures stop until `cli.js retry <id>`. A check that fails as a whole (TOC fetch)
+// backs off the same way, with no limit: once the wait passes the novel's interval, the interval wins.
 const retryPolicy = () => ({
     maxAttempts: Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5),
     retryBaseMin: Number(process.env.CHAPTERLY_RETRY_BASE_MIN || 60),
@@ -30,7 +32,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
     const { maxAttempts, retryBaseMin, onEpubWritten } = { ...retryPolicy(), ...opts };
     const id = novelRow.id;
     db.markCheckStarted(id);
-    let error = null;
+    let error = null, checkRetryAt = null;
     try {
         const novel = await scraper.getNovel(novelRow.toc_url);
         // DefaultParser needs per-site CSS set up in the extension's UI; headless it turns any page's
@@ -70,7 +72,8 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
         ].filter(Boolean).join("; ") || null;
     } catch (e) {
         error = e.message;
-        log(`[${id}] ✗ ${error}`);
+        checkRetryAt = nextRetryAt((novelRow.check_failures || 0) + 1, retryBaseMin);
+        log(`[${id}] ✗ ${error} (retry after ${checkRetryAt})`);
     }
     // Rebuild even after a partial failure, so chapters that did arrive reach the reader.
     if (db.epubStale(id)) {
@@ -83,7 +86,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
             log(`[${id}] ✗ EPUB build failed: ${e.message}`);
         }
     }
-    db.markCheckDone(id, error);
+    db.markCheckDone(id, error, checkRetryAt);
 }
 
 /** Pack all fetched chapters and write to <library>/<Author>/<Title>/<Title>.epub (atomically). */
@@ -108,12 +111,14 @@ async function buildEpub(db, scraper, id) {
 const WEEK_MIN = 7 * 24 * 60;
 
 /**
- * Due when active and: "check now" requested, never checked, or the interval passed since the last start.
+ * Due when active and: "check now" requested, the backoff of a failed check or chapter passed, never
+ * checked, or the interval passed since the last start.
  * Completed + every chapter fetched → never (only "check now"); dropped → at most weekly.
  */
 function isDue(n, at = Date.now()) {
     if (n.status !== "active") return false;
     if (n.check_requested_at) return true;
+    if ([n.check_retry_at, n.next_retry_at].some(t => t && Date.parse(t) <= at)) return true;
     if (n.series_status === "completed" && n.chapters_total > 0 && n.chapters_fetched >= n.chapters_total) return false;
     const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
     return !n.last_checked_at || at - Date.parse(n.last_checked_at) >= intervalMin * 60_000;

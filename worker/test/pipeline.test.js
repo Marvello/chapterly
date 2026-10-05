@@ -123,6 +123,12 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.ok(isDue({ ...due, last_checked_at: ago(60) }, t));
     assert.ok(isDue({ ...due, last_checked_at: ago(1), check_requested_at: ago(0) }, t), "check now");
     assert.ok(!isDue({ ...due, status: "paused", last_checked_at: null, check_requested_at: ago(0) }, t));
+    // A failed chapter's backoff expiring makes the novel due before its interval.
+    assert.ok(isDue({ ...due, last_checked_at: ago(1), next_retry_at: ago(0) }, t), "chapter retry due");
+    assert.ok(!isDue({ ...due, last_checked_at: ago(1), next_retry_at: ago(-5) }, t), "chapter retry not yet due");
+    assert.ok(!isDue({ ...due, status: "paused", last_checked_at: ago(1), next_retry_at: ago(0) }, t));
+    assert.ok(isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(0) }, t), "failed check retry due");
+    assert.ok(!isDue({ ...due, last_checked_at: ago(1), check_retry_at: ago(-5) }, t));
     // Series status: completed + everything fetched → no more scheduled checks; dropped → weekly at most.
     const done = { ...due, series_status: "completed", chapters_total: 10, chapters_fetched: 10 };
     assert.ok(!isDue({ ...done, last_checked_at: ago(100000) }, t), "finished completed novel is never due");
@@ -198,6 +204,17 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
         if (fetched === 2) db.deleteNovel(long.id); return r; } };
     await checkNovel(db, deletingScraper, long, quiet);
     assert.strictEqual(fetched, 2, "no chapters fetched after the novel was deleted");
+
+    // Whole check fails (TOC timeout): retried after 1h, then 2h; a good check resets the backoff.
+    const down = createScraper({ fetch: async () => { throw new Error("Timeout awaiting 'request' for 120000ms"); } });
+    const hoursOut = () => Math.round((Date.parse(db.getNovel(id).check_retry_at) - Date.now()) / 3_600_000);
+    await checkNovel(db, down, db.getNovel(id), quiet);
+    assert.match(db.getNovel(id).last_error, /Timeout awaiting/);
+    assert.deepStrictEqual([db.getNovel(id).check_failures, hoursOut()], [1, 1]);
+    await checkNovel(db, down, db.getNovel(id), quiet);
+    assert.deepStrictEqual([db.getNovel(id).check_failures, hoursOut()], [2, 2]);
+    await checkNovel(db, s, db.getNovel(id), quiet);
+    assert.deepStrictEqual([db.getNovel(id).check_failures, db.getNovel(id).check_retry_at], [0, null]);
 
     // A novel deleted from the UI before/while the worker checks it: no throw, nothing rebuilt.
     const doomed = db.addNovel(`${BASE}?deleted`);

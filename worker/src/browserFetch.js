@@ -9,6 +9,9 @@ const { CookieJar } = require("tough-cookie");
 const cookieJar = new CookieJar();
 const sessionToken = {};
 let got;
+// got-scraping's own default is 60 s. A timeout fails the request like any other error, so it goes
+// through the normal retry backoff (chapter, or whole check when it's the TOC).
+const timeoutMs = () => Number(process.env.CHAPTERLY_FETCH_TIMEOUT_SEC || 120) * 1000;
 
 async function browserFetch(url, init = {}) {
     got ??= (await import("got-scraping")).gotScraping;
@@ -23,6 +26,7 @@ async function browserFetch(url, init = {}) {
         cookieJar,
         sessionToken,
         throwHttpErrors: false,
+        timeout: { request: timeoutMs() },
         responseType: "buffer",
     });
     const headers = new Headers();
