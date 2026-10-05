@@ -1,9 +1,9 @@
 node_modules/
 vendor-WebToEpub/
-data/
+/data/
 docs/
 tasks/*
-library/
+/library/
 .DS_Store
 .superpowers/
 web/node_modules/
