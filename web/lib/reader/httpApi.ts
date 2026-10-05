@@ -1,7 +1,8 @@
 import { AuthError, BadRequestError, type ReaderApi } from "./sync";
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, credentials: "same-origin", cache: "no-store" });
+  // A connection that is up but passes nothing (train, tunnel) would otherwise hang sync for minutes.
+  const res = await fetch(url, { ...init, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15_000) });
   if (res.status === 401) throw new AuthError("signed out");
   if (res.status === 400) throw new BadRequestError(`${url}: ${await res.text()}`);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);

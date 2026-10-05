@@ -36,19 +36,27 @@ export interface ReaderStore {
   deleteNovel(novelId: number): Promise<void>;
 }
 
-export type SyncResult = { downloaded: number; quotaExceeded: boolean };
+/** progressError: progress that couldn't be sent (kept for the next run), e.g. a 403 from a wrong AUTH_URL. */
+export type SyncResult = { downloaded: number; quotaExceeded: boolean; progressError: string | null };
 
 export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flushOnly?: boolean } = {}): Promise<SyncResult> {
+  let progressError: string | null = null;
   for (const e of await store.outbox()) {
     try {
       const r = await api.putProgress(e);
       if (r.position) await store.applyPosition(r.position);
     } catch (err) {
-      if (!(err instanceof BadRequestError)) throw err;   // 400 never gets better (e.g. a wrong phone clock): drop it
+      if (err instanceof AuthError) throw err;
+      if (!(err instanceof BadRequestError)) {
+        // Server or config trouble: keep the entry, stop sending, but still refresh and download.
+        progressError = (err as Error).message;
+        break;
+      }
+      // 400 never gets better (e.g. a wrong phone clock): drop it
     }
     await store.clearOutbox(e.novelId, e.readAt);
   }
-  if (opts.flushOnly) return { downloaded: 0, quotaExceeded: false };
+  if (opts.flushOnly) return { downloaded: 0, quotaExceeded: false, progressError };
 
   const lib = await api.library();
   const ids = new Set(lib.map(n => n.id));
@@ -73,8 +81,8 @@ export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flush
       }
     }
   } catch (err) {
-    if (err instanceof DOMException && err.name === "QuotaExceededError") return { downloaded, quotaExceeded: true };
+    if (err instanceof DOMException && err.name === "QuotaExceededError") return { downloaded, quotaExceeded: true, progressError };
     throw err;
   }
-  return { downloaded, quotaExceeded: false };
+  return { downloaded, quotaExceeded: false, progressError };
 }

@@ -30,10 +30,16 @@ self.addEventListener("fetch", e => {
       return res;
     })));
   } else if (e.request.mode === "navigate" && url.pathname === "/read") {
-    // The shell: network first (fresh deploys), cached copy when offline.
-    e.respondWith(fetch(e.request).then(res => {
+    // The shell: network first (fresh deploys), cached copy when offline — or when the network is too
+    // slow to answer within 4 s (connected but passing nothing). A late answer still refreshes the cache.
+    const network = fetch(e.request).then(res => {
       if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("/read", copy)); }
       return res;
-    }).catch(() => caches.match("/read")));
+    });
+    const cached = () => caches.match("/read");
+    const slow = new Promise(resolve => setTimeout(resolve, 4000)).then(cached);
+    e.respondWith(Promise.race([network, slow])
+      .then(res => res || network)
+      .catch(() => cached().then(hit => hit || network)));
   }
 });

@@ -1,40 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ReaderNovel, ReaderPosition, TocEntry } from "@/lib/db";
-import { mergeOutbox } from "./progress";
-import { AuthError, BadRequestError, syncOnce, type ReaderApi, type ReaderStore } from "./sync";
-import type { OutboxEntry, StoredChapter } from "./types";
-
-function memoryStore() {
-  const s = {
-    library: undefined as ReaderNovel[] | undefined, tocs: new Map<number, TocEntry[]>(),
-    chapters: new Map<number, StoredChapter>(), outbox: new Map<number, OutboxEntry>(), pins: new Set<number>(),
-  };
-  const store: ReaderStore = {
-    getLibrary: async () => s.library,
-    setLibrary: async l => { s.library = l; },
-    applyPosition: async p => {
-      s.library = s.library?.map(n => n.id === p.novelId ? { ...n, progress_chapter_id: p.chapterId, progress_idx: p.idx,
-        progress_fraction: p.fraction, read_at: p.readAt } : n);
-    },
-    getToc: async id => s.tocs.get(id),
-    setToc: async (id, t) => { s.tocs.set(id, t); },
-    cachedChapterIds: async id => new Set([...s.chapters.values()].filter(c => c.novelId === id).map(c => c.id)),
-    getChapter: async id => s.chapters.get(id),
-    putChapters: async list => { for (const c of list) s.chapters.set(c.id, c); },
-    deleteChapters: async ids => { for (const id of ids) s.chapters.delete(id); },
-    outbox: async () => [...s.outbox.values()],
-    getOutbox: async id => s.outbox.get(id),
-    queue: async e => { s.outbox.set(e.novelId, mergeOutbox(s.outbox.get(e.novelId), e)); },
-    clearOutbox: async (id, readAt) => { if (s.outbox.get(id)?.readAt === readAt) s.outbox.delete(id); },
-    pins: async () => new Set(s.pins),
-    setPin: async (id, on) => { if (on) s.pins.add(id); else s.pins.delete(id); },
-    deleteNovel: async id => {
-      for (const c of [...s.chapters.values()]) if (c.novelId === id) s.chapters.delete(c.id);
-      s.tocs.delete(id); s.outbox.delete(id); s.pins.delete(id);
-    },
-  };
-  return { s, store };
-}
+import { AuthError, BadRequestError, syncOnce, type ReaderApi } from "./sync";
+import { memoryStore } from "./testStore";
+import type { OutboxEntry } from "./types";
 
 const novel = (id: number, o: Partial<ReaderNovel> = {}): ReaderNovel => ({ id, title: `N${id}`, author: null,
   cover_url: null, toc_url: "", chapters_fetched: 3, unread: 3, progress_chapter_id: null, progress_idx: null,
@@ -87,6 +55,16 @@ describe("syncOnce", () => {
     expect(api.library).toHaveBeenCalled();
   });
 
+  it("another failure (e.g. 403 from a wrong AUTH_URL) keeps the entry, still refreshes and downloads, and reports it", async () => {
+    const { s, store } = memoryStore();
+    await store.queue(entry());
+    const api = fakeApi({ putProgress: vi.fn(async () => { throw new Error("/api/reader/progress: HTTP 403"); }) });
+    const r = await syncOnce(store, api);
+    expect(s.outbox.size).toBe(1);
+    expect(api.library).toHaveBeenCalled();
+    expect(r).toMatchObject({ downloaded: 3, progressError: "/api/reader/progress: HTTP 403" });
+  });
+
   it("401 rejects with AuthError and keeps the outbox", async () => {
     const { s, store } = memoryStore();
     await store.queue(entry());
@@ -101,7 +79,7 @@ describe("syncOnce", () => {
     await store.putChapters([{ id: 90, novelId: 9, idx: 1, title: null, html: "" }]);
     await store.setPin(9, true);
     const r = await syncOnce(store, fakeApi());
-    expect(r).toEqual({ downloaded: 3, quotaExceeded: false });
+    expect(r).toEqual({ downloaded: 3, quotaExceeded: false, progressError: null });
     expect([...s.chapters.keys()].sort()).toEqual([1, 2, 3]);
     expect(s.pins.size).toBe(0);
     expect(s.library?.map(n => n.id)).toEqual([1]);
@@ -110,6 +88,6 @@ describe("syncOnce", () => {
   it("stops and reports when storage is full", async () => {
     const { store } = memoryStore();
     store.putChapters = async () => { throw new DOMException("full", "QuotaExceededError"); };
-    expect(await syncOnce(store, fakeApi())).toEqual({ downloaded: 0, quotaExceeded: true });
+    expect(await syncOnce(store, fakeApi())).toEqual({ downloaded: 0, quotaExceeded: true, progressError: null });
   });
 });

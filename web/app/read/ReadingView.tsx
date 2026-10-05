@@ -2,37 +2,36 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, Settings2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { TocEntry } from "@/lib/db";
+import { appendBlock } from "@/lib/reader/blocks";
 import { go, runSync } from "@/lib/reader/client";
+import { fetchChapter } from "@/lib/reader/fetchChapter";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
 import { decide, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import { positionFromScroll } from "@/lib/reader/scroll";
 import { THEMES, settingsStore, type ReaderSettings } from "@/lib/reader/settings";
-import type { ReaderStore } from "@/lib/reader/sync";
+import { AuthError, type ReaderStore } from "@/lib/reader/sync";
 import type { Position } from "@/lib/reader/types";
 
 type Block = TocEntry & { html: string | null };   // html null = not downloaded
 const MAX_BLOCKS = 5;                                // chapters kept in the DOM
 
-async function loadBlock(store: ReaderStore, novelId: number, toc: TocEntry[], entry: TocEntry): Promise<Block> {
-  const hit = await store.getChapter(entry.id);
-  if (hit) return { ...entry, html: hit.html };
-  if (navigator.onLine) {
-    try {
-      const i = toc.findIndex(c => c.id === entry.id);
-      const [row] = await httpApi.chapters(novelId, i > 0 ? toc[i - 1].id : null, 1);
-      if (row?.id === entry.id) {
-        await store.putChapters([row]);
-        return { ...entry, html: row.html };
-      }
-    } catch { /* falls through to the "not downloaded" stub */ }
+/** The chapter (phone copy, else server); a stub when unreachable. AuthError propagates. */
+async function loadBlock(store: ReaderStore, novelId: number, toc: TocEntry[], entry: TocEntry) {
+  try {
+    const r = await fetchChapter(httpApi, store, novelId, toc, entry.id);
+    return { block: { ...entry, html: r.chapter?.html ?? null } as Block, toc: r.toc };
+  } catch (e) {
+    if (e instanceof AuthError) throw e;
+    return { block: { ...entry, html: null } as Block, toc };
   }
-  return { ...entry, html: null };
 }
 
 export default function ReadingView({ novelId, chapterId }: { novelId: number; chapterId: number }) {
   const store = useMemo(() => idbStore(), []);
+  const router = useRouter();
   const [startId] = useState(chapterId);   // later URL updates come from our own replaceState
   const [toc, setToc] = useState<TocEntry[]>([]);
   const [novelTitle, setNovelTitle] = useState("");
@@ -45,14 +44,17 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const saved = useRef<Position | null>(null);
   const dismissed = useRef(false);
   const restoreTo = useRef<{ chapterId: number; fraction: number } | null>(null);
-  const trimmed = useRef(0);
+  const anchor = useRef<{ id: number; top: number } | null>(null);   // chapter to hold still across a re-render
+  const gen = useRef(0);                                               // bumped by every jump; stale loads are dropped
+  const opened = useRef(false);                                        // the initial open runs once (deps change with the URL)
   const loading = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const updateSettings = (p: Partial<ReaderSettings>) => settingsStore.set({ ...settings, ...p });
+  const onLoadError = useCallback((e: unknown) => { if (e instanceof AuthError) router.replace("/login"); }, [router]);
 
-  // We compensate for trimmed chapters ourselves; the browser's scroll anchoring would do it twice.
+  // We hold the reading spot ourselves (anchor below); the browser's scroll anchoring would do it twice.
   useEffect(() => {
     const el = document.documentElement;
     el.style.overflowAnchor = "none";
@@ -60,16 +62,26 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   }, []);
 
   const openAt = useCallback(async (entry: TocEntry, list: TocEntry[], fraction = 0) => {
-    restoreTo.current = { chapterId: entry.id, fraction };
-    setBlocks([await loadBlock(store, novelId, list, entry)]);
-    setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
-  }, [novelId, store]);
+    const g = ++gen.current;
+    try {
+      const { block, toc: fresh } = await loadBlock(store, novelId, list, entry);
+      if (g !== gen.current) return;   // another jump happened meanwhile
+      if (fresh !== list) setToc(fresh);
+      restoreTo.current = { chapterId: entry.id, fraction };
+      setBlocks([block]);
+      setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
+    } catch (e) {
+      onLoadError(e);
+    }
+  }, [novelId, store, onLoadError]);
 
   useEffect(() => {
+    if (opened.current) return;
+    opened.current = true;
     (async () => {
       let list = await store.getToc(novelId);
       if (!list && navigator.onLine) {
-        try { list = await httpApi.toc(novelId); await store.setToc(novelId, list); } catch { /* handled below */ }
+        try { list = await httpApi.toc(novelId); await store.setToc(novelId, list); } catch (e) { onLoadError(e); }
       }
       list ??= [];
       const novel = (await store.getLibrary())?.find(n => n.id === novelId);
@@ -79,9 +91,16 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
       const entry = list.find(c => c.id === startId);
       if (entry) await openAt(entry, list, saved.current?.chapterId === entry.id ? saved.current.fraction : 0);
     })();
-  }, [novelId, startId, store, openAt]);
+  }, [novelId, startId, store, openAt, onLoadError]);
 
-  // After rendering: jump to a requested spot, or undo the jump caused by removing a chapter above.
+  const topVisibleChapter = () => {
+    const el = [...(root.current?.querySelectorAll<HTMLElement>("[data-chapter]") ?? [])]
+      .find(e => e.getBoundingClientRect().bottom > 0);
+    return el ? { id: Number(el.dataset.chapter), top: el.getBoundingClientRect().top } : null;
+  };
+
+  // After rendering: jump to a requested spot, or keep the chapter being read where it was on screen
+  // (a chapter trimmed above would otherwise shift the text by its height plus margin).
   useLayoutEffect(() => {
     const r = restoreTo.current;
     if (r) {
@@ -91,9 +110,11 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
         restoreTo.current = null;
       }
     }
-    if (trimmed.current) {
-      window.scrollBy(0, -trimmed.current);
-      trimmed.current = 0;
+    const a = anchor.current;
+    if (a) {
+      anchor.current = null;
+      const el = root.current?.querySelector<HTMLElement>(`[data-chapter="${a.id}"]`);
+      if (el) window.scrollBy(0, el.getBoundingClientRect().top - a.top);
     }
   }, [blocks]);
 
@@ -103,11 +124,19 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     const next = toc[toc.findIndex(c => c.id === last.id) + 1];
     if (!next) return;
     loading.current = true;
-    const b = await loadBlock(store, novelId, toc, next);
-    if (blocks.length >= MAX_BLOCKS) trimmed.current = root.current?.querySelector<HTMLElement>("[data-chapter]")?.offsetHeight ?? 0;
-    setBlocks(prev => [...(prev.length >= MAX_BLOCKS ? prev.slice(1) : prev), b]);
-    loading.current = false;
-  }, [blocks, toc, store, novelId]);
+    const g = gen.current;
+    try {
+      const { block, toc: fresh } = await loadBlock(store, novelId, toc, next);
+      if (g !== gen.current) return;
+      if (fresh !== toc) setToc(fresh);
+      anchor.current = topVisibleChapter();
+      setBlocks(prev => appendBlock(prev, last.id, block, MAX_BLOCKS));
+    } catch (e) {
+      onLoadError(e);
+    } finally {
+      loading.current = false;
+    }
+  }, [blocks, toc, store, novelId, onLoadError]);
 
   useEffect(() => {
     const el = sentinel.current;
@@ -117,12 +146,21 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     return () => io.disconnect();
   }, [appendNext]);
 
-  // Back online: fill in stubs.
+  // Back online: fill in stubs (in place, so a chapter appended meanwhile isn't overwritten).
   useEffect(() => {
-    const retry = async () => setBlocks(await Promise.all(blocks.map(b => (b.html === null ? loadBlock(store, novelId, toc, b) : b))));
+    const retry = async () => {
+      for (const b of blocks.filter(x => x.html === null)) {
+        try {
+          const { block } = await loadBlock(store, novelId, toc, b);
+          if (block.html !== null) setBlocks(prev => prev.map(x => (x.id === block.id ? block : x)));
+        } catch (e) {
+          onLoadError(e);
+        }
+      }
+    };
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
-  }, [blocks, toc, store, novelId]);
+  }, [blocks, toc, store, novelId, onLoadError]);
 
   const currentPosition = useCallback((): Position | null => {
     const els = root.current?.querySelectorAll<HTMLElement>("[data-chapter]");

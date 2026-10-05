@@ -23,7 +23,11 @@ export default function ReaderApp() {
     const sync = () => {
       if (!navigator.onLine) return;
       runSync()
-        .then(r => { setNotice(r.quotaExceeded ? "Phone storage is full, so downloading stopped." : null); setRev(v => v + 1); })
+        .then(r => {
+          setNotice(r.quotaExceeded ? "Phone storage is full, so downloading stopped."
+            : r.progressError ? `Reading progress couldn't be saved to the server (${r.progressError}); it will retry.` : null);
+          setRev(v => v + 1);
+        })
         .catch(e => {
           if (e instanceof AuthError) router.replace("/login");
           else setNotice("Sync failed; it will retry when you come back.");
