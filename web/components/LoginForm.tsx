@@ -31,7 +31,7 @@ export default function LoginForm({ passwordLogin, oidcName, initialError }:
 
   return (
     <div className="w-full max-w-sm rounded-xl border border-edge bg-component p-6">
-      <h1 className="mb-6 flex items-center gap-2 text-xl font-semibold text-tprimary">
+      <h1 className="mb-6 flex items-center gap-2 font-serif text-xl font-semibold text-tprimary">
         <BookOpen className="size-5 text-accent" /> Chapterly
       </h1>
       {error && <p className="mb-4 text-sm text-critical" role="alert">{ERROR}</p>}
