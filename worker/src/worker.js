@@ -39,8 +39,6 @@ function safeName(s) {
 /**
  * One check of one novel: refresh the TOC, fetch pending chapters one by one, rebuild the EPUB.
  * Never throws; errors are recorded on the novel.
- */
-/**
  * opts: maxAttempts / retryBaseMin (default: env retry policy) and onEpubWritten(title), e.g. the
  * Audiobookshelf rescan, called only when this check actually rewrote the EPUB.
  */

@@ -10,7 +10,7 @@ CREATE TABLE novels (
     subjects           TEXT,
     description        TEXT,
     cover_url          TEXT,
-    status             TEXT NOT NULL DEFAULT 'active',   -- active | paused | completed
+    status             TEXT NOT NULL DEFAULT 'active',   -- active | paused (story completion: series_status, migration 005)
     check_interval_min INTEGER NOT NULL DEFAULT 1440, -- once a day
     last_checked_at    TEXT,
     last_success_at    TEXT,

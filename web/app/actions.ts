@@ -67,7 +67,6 @@ export async function deleteAction(form: FormData) {
   if (deleted) redirect("/");
 }
 
-/** Library layout (overview / table / posters), remembered for a year. Unknown values → overview. */
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
 }

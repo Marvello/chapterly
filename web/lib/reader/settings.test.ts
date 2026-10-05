@@ -15,6 +15,19 @@ it("round-trips settings and falls back to defaults on missing, broken or throwi
   expect(() => saveSettings(DEFAULT_SETTINGS, broken)).not.toThrow();
 });
 
+it("validates each stored field: old settings keep their values, bad ones fall back alone", () => {
+  const s = memory();
+  s.setItem("chapterly-reader-settings", JSON.stringify({ fontSize: 22, lineHeight: 1.5, theme: "dark" }));   // pre-font/width
+  expect(loadSettings(s)).toEqual({ ...DEFAULT_SETTINGS, fontSize: 22, lineHeight: 1.5, theme: "dark" });
+  s.setItem("chapterly-reader-settings", JSON.stringify({ fontSize: 99, lineHeight: "2", theme: "neon", font: "toString", width: "wide" }));
+  expect(loadSettings(s)).toEqual({ ...DEFAULT_SETTINGS, width: "wide" });
+  for (const raw of ["null", "5", "[]"]) {
+    s.setItem("chapterly-reader-settings", raw);
+    expect(loadSettings(s)).toEqual(DEFAULT_SETTINGS);
+  }
+  expect(DEFAULT_SETTINGS).toMatchObject({ theme: "system", font: "serif", width: "normal" });
+});
+
 it("settingsStore: server snapshot is the defaults; set() updates the client snapshot and notifies", () => {
   expect(settingsStore.getServer()).toEqual(DEFAULT_SETTINGS);
   let calls = 0;

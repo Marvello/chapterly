@@ -12,7 +12,7 @@ import { idbStore } from "@/lib/reader/idb";
 import { chapterLabel } from "@/lib/reader/label";
 import { decide, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import { positionFromScroll } from "@/lib/reader/scroll";
-import { THEMES, settingsStore, type ReaderSettings } from "@/lib/reader/settings";
+import { FONTS, FONT_SIZE, LINE_HEIGHT, THEMES, WIDTHS, settingsStore, type ReaderSettings } from "@/lib/reader/settings";
 import { AuthError, type ReaderStore } from "@/lib/reader/sync";
 import type { Position } from "@/lib/reader/types";
 
@@ -30,13 +30,30 @@ async function loadBlock(store: ReaderStore, novelId: number, toc: TocEntry[], e
   }
 }
 
+const keys = <T extends object>(o: T) => Object.keys(o) as (keyof T & string)[];
+
+/** One row of mutually exclusive buttons (theme, font, width); each option can preview itself via `style`. */
+function Choice<T extends string>({ label, options, value, onChange, style }: {
+  label: string; options: readonly T[]; value: T; onChange: (v: T) => void; style?: (v: T) => React.CSSProperties;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-2">
+      {options.map(o => (
+        <button key={o} onClick={() => onChange(o)} aria-pressed={value === o} style={style?.(o)}
+          className={`min-h-11 flex-1 rounded border px-1 capitalize ${value === o ? "font-semibold" : "opacity-70"}`}>{o}</button>
+      ))}
+    </div>
+  );
+}
+
 export default function ReadingView({ novelId, chapterId }: { novelId: number; chapterId: number }) {
   const store = useMemo(() => idbStore(), []);
   const router = useRouter();
   const [startId] = useState(chapterId);   // later URL updates come from our own replaceState
   const [toc, setToc] = useState<TocEntry[]>([]);
   const [novelTitle, setNovelTitle] = useState("");
-  const [chapterTitle, setChapterTitle] = useState("");
+  const [hereId, setHereId] = useState<number | null>(null);   // chapter at the top of the screen
+  const [hereFraction, setHereFraction] = useState(0);         // how far into it (0..1, rounded)
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [banner, setBanner] = useState<Position | null>(null);
   const [barHidden, setBarHidden] = useState(false);
@@ -52,6 +69,8 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const root = useRef<HTMLDivElement>(null);
   const header = useRef<HTMLElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
 
   const updateSettings = (p: Partial<ReaderSettings>) => settingsStore.set({ ...settings, ...p });
   const onLoadError = useCallback((e: unknown) => { if (e instanceof AuthError) router.replace("/login"); }, [router]);
@@ -71,7 +90,8 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
       if (fresh !== list) setToc(fresh);
       restoreTo.current = { chapterId: entry.id, fraction };
       setBlocks([block]);
-      setChapterTitle(chapterLabel(entry));
+      setHereId(entry.id);
+      setHereFraction(fraction);
     } catch (e) {
       onLoadError(e);
     }
@@ -177,8 +197,8 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const track = useCallback(async () => {
     const cur = currentPosition();
     if (!cur) return;
-    const entry = toc.find(c => c.id === cur.chapterId);
-    if (entry) setChapterTitle(chapterLabel(entry));
+    setHereId(cur.chapterId);
+    setHereFraction(Math.round(cur.fraction * 100) / 100);
     const inUrl = new URLSearchParams(window.location.search).get("chapter");
     if (inUrl && inUrl !== String(cur.chapterId)) {   // no chapter: we're being left (track at unmount)
       window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${cur.chapterId}`);
@@ -191,7 +211,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     } else if (d === "behind" && !dismissed.current) {
       setBanner(saved.current);
     }
-  }, [currentPosition, toc, novelId, store]);
+  }, [currentPosition, novelId, store]);
 
   useEffect(() => {
     const t = setInterval(track, 5000);
@@ -214,6 +234,21 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Settings popover: focus moves in on open; Escape or a tap outside closes it and focus returns to the trigger.
+  useEffect(() => {
+    if (!showSettings) return;
+    popover.current?.focus();
+    const close = () => { setShowSettings(false); settingsButton.current?.focus(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!popover.current?.contains(t) && !settingsButton.current?.contains(t)) close();   // the trigger toggles itself
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
+  }, [showSettings]);
+
   const setProgressHere = async () => {
     const cur = currentPosition();
     if (!cur) return;
@@ -234,45 +269,66 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const prev = first ? toc[toc.findIndex(c => c.id === first.id) - 1] : undefined;
   const atEnd = !!blocks.at(-1) && toc.at(-1)?.id === blocks.at(-1)!.id;
   const theme = THEMES[settings.theme];
+  const hereIdx = toc.findIndex(c => c.id === hereId);
 
   return (
     <div style={{ ...theme, fontSize: settings.fontSize, lineHeight: settings.lineHeight }} className="min-h-screen">
-      <header ref={header} className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
+      <header ref={header} className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform motion-reduce:transition-none ${barHidden ? "-translate-y-full" : ""}`}
         style={{ background: theme.background, borderBottom: "1px solid rgba(127,127,127,.25)" }}>
-        <button onClick={() => go(`/?novel=${novelId}`)} aria-label="Back to chapters"><ArrowLeft className="size-5" /></button>
+        {/* 44px tap targets; the negative margin keeps the bar as slim as the 20px icons made it */}
+        <button onClick={() => go(`/?novel=${novelId}`)} aria-label="Back to chapters" className="-m-2 grid size-11 shrink-0 place-items-center">
+          <ArrowLeft className="size-5" />
+        </button>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate font-medium">{novelTitle}</p>
-          <p className="truncate opacity-70">{chapterTitle}</p>
+          {hereIdx >= 0 && (
+            <p className="flex gap-2 opacity-70">
+              <span className="truncate">{chapterLabel(toc[hereIdx])}</span>
+              <span className="ml-auto shrink-0 tabular-nums" aria-hidden>{hereIdx + 1} / {toc.length}</span>
+              <span className="sr-only">, chapter {hereIdx + 1} of {toc.length}</span>
+            </p>
+          )}
         </div>
-        <button onClick={() => setShowSettings(v => !v)} aria-label="Reading settings"><Settings2 className="size-5" /></button>
+        <button ref={settingsButton} onClick={() => setShowSettings(v => !v)} aria-label="Reading settings"
+          aria-expanded={showSettings} aria-controls="reader-settings" className="-m-2 grid size-11 shrink-0 place-items-center">
+          <Settings2 className="size-5" />
+        </button>
+        {hereIdx >= 0 && (   // how far into the novel; updates with the 5 s position tick, so no animation
+          <div className="absolute bottom-0 left-0 h-0.5 bg-current opacity-40" aria-hidden
+            style={{ width: `${((hereIdx + hereFraction) / toc.length) * 100}%` }} />
+        )}
       </header>
 
       {showSettings && (
-        <div className="fixed right-2 top-14 z-20 w-64 space-y-3 rounded-xl p-3 text-sm shadow-lg"
+        <div ref={popover} id="reader-settings" role="dialog" aria-label="Reading settings" tabIndex={-1}
+          className="fixed right-2 top-14 z-20 w-72 space-y-3 rounded-xl p-3 text-sm shadow-lg"
           style={{ background: theme.background, border: "1px solid rgba(127,127,127,.35)" }}>
           <div className="flex items-center justify-between">Text size
             <span className="flex gap-2">
-              <button className="rounded border px-2" onClick={() => updateSettings({ fontSize: Math.max(14, settings.fontSize - 2) })}>A−</button>
-              <button className="rounded border px-2" onClick={() => updateSettings({ fontSize: Math.min(28, settings.fontSize + 2) })}>A+</button>
+              <button className="min-h-11 min-w-11 rounded border px-2" aria-label="Smaller text"
+                onClick={() => updateSettings({ fontSize: Math.max(FONT_SIZE.min, settings.fontSize - 2) })}>A−</button>
+              <button className="min-h-11 min-w-11 rounded border px-2" aria-label="Larger text"
+                onClick={() => updateSettings({ fontSize: Math.min(FONT_SIZE.max, settings.fontSize + 2) })}>A+</button>
             </span>
           </div>
           <div className="flex items-center justify-between">Line spacing
             <span className="flex gap-2">
-              <button className="rounded border px-2" onClick={() => updateSettings({ lineHeight: Math.max(1.3, +(settings.lineHeight - 0.1).toFixed(1)) })}>−</button>
-              <button className="rounded border px-2" onClick={() => updateSettings({ lineHeight: Math.min(2.2, +(settings.lineHeight + 0.1).toFixed(1)) })}>+</button>
+              <button className="min-h-11 min-w-11 rounded border px-2" aria-label="Less line spacing"
+                onClick={() => updateSettings({ lineHeight: Math.max(LINE_HEIGHT.min, +(settings.lineHeight - 0.1).toFixed(1)) })}>−</button>
+              <button className="min-h-11 min-w-11 rounded border px-2" aria-label="More line spacing"
+                onClick={() => updateSettings({ lineHeight: Math.min(LINE_HEIGHT.max, +(settings.lineHeight + 0.1).toFixed(1)) })}>+</button>
             </span>
           </div>
-          <div className="flex gap-2">
-            {(Object.keys(THEMES) as ReaderSettings["theme"][]).map(t => (
-              <button key={t} onClick={() => updateSettings({ theme: t })} aria-pressed={settings.theme === t}
-                className={`flex-1 rounded border px-2 py-1 capitalize ${settings.theme === t ? "font-semibold" : "opacity-70"}`}
-                style={THEMES[t]}>{t}</button>
-            ))}
-          </div>
+          <Choice label="Theme" options={keys(THEMES)} value={settings.theme} onChange={theme => updateSettings({ theme })}
+            style={t => THEMES[t]} />
+          <Choice label="Font" options={keys(FONTS)} value={settings.font} onChange={font => updateSettings({ font })}
+            style={f => ({ fontFamily: FONTS[f] })} />
+          <Choice label="Text width" options={keys(WIDTHS)} value={settings.width} onChange={width => updateSettings({ width })} />
         </div>
       )}
 
-      <div ref={root} className="mx-auto max-w-2xl px-5 pb-24 pt-20">
+      <div ref={root} className="mx-auto px-5 pb-24 pt-20"
+        style={{ fontFamily: FONTS[settings.font], maxWidth: WIDTHS[settings.width] }}>
         {toc.length === 0 && <p className="opacity-70">This novel isn&apos;t on the phone yet. Connect once to load it.</p>}
         {prev && (
           <button onClick={() => openAt(prev, toc)} className="mb-8 block text-sm opacity-70 underline">
@@ -295,7 +351,8 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
           style={{ background: theme.background, border: "1px solid rgba(127,127,127,.35)" }} role="status">
           <div className="mb-2 flex items-start justify-between gap-2">
             <p>Your progress is at {chapterLabel(toc.find(c => c.id === banner.chapterId) ?? banner)} ({Math.round(banner.fraction * 100)}%).</p>
-            <button onClick={() => { dismissed.current = true; setBanner(null); }} aria-label="Dismiss"><X className="size-4" /></button>
+            <button onClick={() => { dismissed.current = true; setBanner(null); }} aria-label="Dismiss"
+              className="-m-3 grid size-11 shrink-0 place-items-center"><X className="size-4" /></button>
           </div>
           <div className="flex gap-2">
             <button onClick={setProgressHere} className="flex-1 rounded-lg border px-3 py-1.5">Set progress here</button>
