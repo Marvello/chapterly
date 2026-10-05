@@ -56,6 +56,12 @@ Set all three `AUTH_OIDC_*` (issuer, client id, secret) to add a "Sign in with <
 3. First sign-in links the OIDC identity to the account with the same email; afterwards only that
    identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
+Password sign-in is rate-limited (10 attempts/min) per client IP, plus a per-account lockout. The app
+only learns the client IP from Cloudflare's `cf-connecting-ip` header, and only trusts it with
+`TRUST_CF_HEADER=1` — set that only behind a Cloudflare tunnel/proxy that is the sole way in. Without it
+(e.g. plain compose, no proxy) all clients share one rate-limit bucket; the account lockout still applies.
+`X-Forwarded-For` is never trusted. Sessions expire after 7 days without use.
+
 ## Deploy on a server
 Keep a git checkout of this repo on the server, next to its `.env` (never committed). To update, push
 from your machine, then pull and rebuild on the server:

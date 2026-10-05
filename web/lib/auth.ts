@@ -5,16 +5,11 @@ import { readAuthConfig } from "./authConfig";
 import { getDb } from "./db";
 import { decideOidcLogin } from "./oidcLogin";
 import { verifyPasswordLogin } from "./passwordLogin";
-import { createRateLimiter } from "./rateLimit";
+import { clientIp, createRateLimiter } from "./rateLimit";
 import { securityLog } from "./securityLog";
 import { checkSession } from "./session";
 
 const allowIp = createRateLimiter(10, 60_000); // security.md #17: 10 password attempts / min / IP
-
-/** Behind a Cloudflare tunnel/proxy the client IP is in cf-connecting-ip. */
-export function clientIp(h: Headers): string {
-  return h.get("cf-connecting-ip") ?? h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-}
 
 type Token = { uid?: number; sv?: number; email?: string | null; name?: string | null };
 
@@ -41,7 +36,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth((): NextAuthConfig =
   return {
     providers,
     trustHost: true,
-    session: { strategy: "jwt" },
+    session: { strategy: "jwt", maxAge: 7 * 24 * 3600 }, // unused (leaked/signed-out) JWTs die in a week, not 30 days
     pages: { signIn: "/login", error: "/login" },
     useSecureCookies: (process.env.AUTH_URL ?? "").startsWith("https://"), // security.md #19 (https deployments)
     callbacks: {

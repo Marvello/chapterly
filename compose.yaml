@@ -46,6 +46,7 @@ services:
       AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
       AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
       AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
+      TRUST_CF_HEADER: ${TRUST_CF_HEADER:-}   # 1 only behind a Cloudflare tunnel that is the sole way in
       CHAPTERLY_MAX_ATTEMPTS: ${CHAPTERLY_MAX_ATTEMPTS:-5}
     volumes:
       - ${CHAPTERLY_DATA_DIR:-chapterly-data}:/data
