@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-
-const PUBLIC = ["/login", "/api/auth", "/api/health", "/robots.txt", "/icon.svg"];
+import { PUBLIC_PATHS, proxyDecision } from "@/lib/proxyRules";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (PUBLIC.some(p => path === p || path.startsWith(`${p}/`))) return NextResponse.next();
-  const session = await auth();
-  if (!session) {
+  const isPublic = PUBLIC_PATHS.some(p => path === p || path.startsWith(`${p}/`));
+  const decision = proxyDecision(path, isPublic || !!(await auth()));
+  if (decision === "unauthorized") return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (decision === "login") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

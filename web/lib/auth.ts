@@ -74,7 +74,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth((): NextAuthConfig =
       },
       session({ session, token }) {
         const t = token as Token;
-        session.user = { ...session.user, email: t.email ?? "", name: t.name ?? null };
+        session.user = { ...session.user, id: String(t.uid), email: t.email ?? "", name: t.name ?? null };
         return session;
       },
     },
@@ -85,4 +85,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth((): NextAuthConfig =
 export async function requireUser(): Promise<void> {
   const session = await auth();
   if (!session?.user) throw new Error("Not signed in");
+}
+
+/** Signed-in user's id for route handlers and pages, or null (route handlers answer 401 themselves). */
+export async function currentUserId(): Promise<number | null> {
+  const id = Number((await auth())?.user?.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
