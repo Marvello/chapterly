@@ -12,6 +12,7 @@ import SeriesStatusSelect from "@/components/SeriesStatusSelect";
 import StatusBadge from "@/components/StatusBadge";
 import { currentUserId } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { chapterLabel } from "@/lib/reader/label";
 import { parseId } from "@/lib/validate";
 import { displayTitle, isChecking, isSeriesDone, nextCheckAt, nextCheckLabel, novelStatus, relativeTime, workerDown } from "@/lib/view";
 
@@ -26,16 +27,18 @@ export default async function NovelPage({ params, searchParams }:
   const n = id ? db.getNovel(id) : undefined;
   if (!n) notFound();
 
+  const uid = await currentUserId();
+  const reading = uid ? db.readerLibrary(uid, n.id)[0] : undefined;
   const total = db.chapterCount(n.id);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const page = Math.min(pages, parseId((await searchParams).page ?? "1") ?? 1);
+  // ponytail: idx ≈ position (TOC order), so the progress page can be off by one for TOCs with gaps; exact needs a COUNT query.
+  const progressPage = reading?.progress_idx != null ? Math.floor(reading.progress_idx / PAGE_SIZE) + 1 : 1;
+  const page = Math.min(pages, parseId((await searchParams).page ?? "") ?? progressPage);
   const chapters = db.chapterPage(n.id, PAGE_SIZE, (page - 1) * PAGE_SIZE);
   const failing = db.failingChapters(n.id);
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
   const [counts] = db.listNovels(undefined, n.id);
-  const uid = await currentUserId();
-  const reading = uid ? db.readerLibrary(uid, n.id)[0] : undefined;
   const seenAt = db.workerSeenAt();
   const workerStopped = workerDown(seenAt, Number(process.env.CHAPTERLY_TICK_MIN || 1));
   const unread = reading?.progress_chapter_id != null ? reading.unread : null;
@@ -122,9 +125,9 @@ export default async function NovelPage({ params, searchParams }:
         <h2 className="mb-2 font-medium text-tprimary">Chapters <span className="text-tmuted">({total})</span></h2>
         <ul className="divide-y divide-edge rounded-xl border border-edge bg-component">
           {chapters.map(c => (
-            <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm" aria-current={c.id === reading?.progress_chapter_id || undefined}>
               <span className="w-12 shrink-0 text-right tabular-nums text-tmuted">{c.idx + 1}</span>
-              <span className="min-w-0 flex-1 truncate text-tsecondary">{c.title || c.url}</span>
+              <span className={`min-w-0 flex-1 truncate ${c.id === reading?.progress_chapter_id ? "text-accent" : "text-tsecondary"}`}>{chapterLabel(c)}</span>
               {c.fetched
                 ? <span className="flex shrink-0 items-center gap-1 text-xs text-tmuted"><Check className="size-3 text-good" />{relativeTime(c.fetched_at)}</span>
                 : c.error
@@ -135,9 +138,9 @@ export default async function NovelPage({ params, searchParams }:
         </ul>
         {pages > 1 && (
           <nav className="mt-3 flex items-center justify-between text-sm">
-            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent">← Newer</Link> : <span />}
+            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent">← Earlier</Link> : <span />}
             <span className="text-tmuted">Page {page} of {pages}</span>
-            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent">Older →</Link> : <span />}
+            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent">Later →</Link> : <span />}
           </nav>
         )}
       </section>

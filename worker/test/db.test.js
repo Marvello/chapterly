@@ -62,9 +62,10 @@ const fresh = name => path.join(tmp, name);
     w.saveChapter(c1.id, "<p>one</p>", 2);
     w.failChapter(c2.id, "HTTP 404", null);
     const page = w.chapterPage(n.id, 2, 0);
-    assert.deepStrictEqual(page.map(c => c.idx), [3, 2], "newest first, limited");
+    assert.deepStrictEqual(page.map(c => c.idx), [1, 2], "reading order (like the reader), limited");
     assert.ok(!("html" in page[0]), "chapter list never carries html");
-    assert.strictEqual(w.chapterPage(n.id, 2, 2)[0].fetched, 1);
+    assert.strictEqual(page[0].fetched, 1);
+    assert.deepStrictEqual(w.chapterPage(n.id, 2, 2).map(c => c.idx), [3]);
     assert.strictEqual(w.chapterCount(n.id), 3);
     assert.deepStrictEqual(w.failingChapters(n.id).map(c => c.idx), [2]);
 
