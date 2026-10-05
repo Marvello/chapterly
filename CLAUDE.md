@@ -28,10 +28,15 @@ SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapte
   query string via `history.pushState` so the service worker (`public/sw.js`) can cache it as one shell.
   The library renders from the phone's cached `/api/reader/library` (full rows + progress) and hides
   server-only parts (add, sign-out, check status, Manage link) while `lib/reader/online.ts` says the server
-  is unreachable (no network, or the last sync failed with a network error/timeout). Layout choice is
+  is unreachable (no network, or the last sync failed with a network error/timeout or a gateway
+  502/503/504/530, `online.ts unreachable`). The SW likewise serves the cached shell for any non-ok, non-redirect
+  answer to `/` (a Cloudflare 5xx while the home server is down). Layout choice is
   per-device (`viewPref.ts`, localStorage); the novel management page `/novels/[id]` stays server-rendered. Chapters live in IndexedDB (`lib/reader/idb.ts`), not
-  the SW cache. Logic is pure and tested: `progress.ts` (forward-only rules; "behind" = an earlier chapter),
-  `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads, in-memory store tests),
+  the SW cache. That DB is per device, not per user: sign-out (`components/SignOutButton.tsx`) deletes it first.
+  Connections close on `versionchange`; a blocked upgrade rejects with `IdbBlockedError` (shown as a notice).
+  `client.ts runSync`: one sync at a time; calls during a run share one follow-up run (full if any wanted full). Logic is pure and tested: `progress.ts` (forward-only rules; "behind" = an earlier chapter),
+  `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads; re-fetches a TOC only when `chapters_fetched` changed; in-memory
+  store tests), `label.ts` (chapter label: title, else `Chapter idx+1` — idx is 0-based),
   `settings.ts` (useSyncExternalStore store; server renders defaults).
 - API: `app/api/reader/*` are thin wrappers over `lib/reader/api.ts`. Signed-out `/api/*` gets 401 JSON
   (`lib/proxyRules.ts`). `PUT /progress` requires JSON + same Origin (CSRF).
