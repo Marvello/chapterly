@@ -35,6 +35,14 @@ Docker Desktop** (SQLite WAL across the Mac/VM boundary can corrupt reads); use
 is fine. Change the password with `cli.js user:password <email>` (logs out every session). The web port
 listens on all host interfaces (see Deploy). Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
+### Reader (phone)
+Open `/read` (or "Reader" in the header) and use Chrome's "Install app" to put it on the home screen.
+It shows the chapters straight from the DB. Progress is saved per novel and only moves forward on its own:
+opening an earlier chapter shows "Your progress is at …" with **Set progress here** / **Go to it**. The
+current chapter plus the next 50 unread of every novel you're reading are kept on the phone for offline
+reading; "Download unread" on a novel keeps all of them. EPUB building for Audiobookshelf can be switched
+off per novel (novel page, or `node cli.js epub <id> on|off`).
+
 ### Login: password and/or OIDC
 Controlled by env (see `.env.example`). With no `AUTH_OIDC_*` set, only the password form is shown.
 Set all three `AUTH_OIDC_*` (issuer, client id, secret) to add a "Sign in with <AUTH_OIDC_NAME>" button
@@ -72,6 +80,7 @@ arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterl
     node cli.js build  <id>                                    # rebuild EPUB from stored chapters
     node cli.js pause|resume|remove <id>
     node cli.js retry  <id>                                    # retry chapters that gave up
+    node cli.js epub   <id> on|off                             # EPUB / Audiobookshelf rescan for this novel
     npm run worker                                             # run forever (from worker/)
 
 - **Storage:** SQLite at `CHAPTERLY_DB` (default `data/chapterly.db` at the repo root), via built-in `node:sqlite` (Node 24).

@@ -21,3 +21,17 @@ README.md has the full setup, env vars and CLI.
 
 ## Deploy
 Runs on tower (homeserver); deploy steps and paths are in `../common-tech/memory/homeserver/app-chapterly.md`.
+
+## Reader (web/app/read, web/lib/reader)
+- `/read` is one client-rendered page; views switch by query string via `history.pushState` so the service
+  worker (`public/sw.js`) can cache it as one shell. Chapters live in IndexedDB (`lib/reader/idb.ts`), not
+  the SW cache. Logic is pure and tested: `progress.ts` (forward-only rules; "behind" = an earlier chapter),
+  `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads, in-memory store tests),
+  `settings.ts` (useSyncExternalStore store; server renders defaults).
+- API: `app/api/reader/*` are thin wrappers over `lib/reader/api.ts`. Signed-out `/api/*` gets 401 JSON
+  (`lib/proxyRules.ts`). `PUT /progress` requires JSON + same Origin (CSRF).
+- Chapter HTML is sanitized with DOMPurify: worker before saving (`worker/src/sanitize.js`), web on first
+  read for older rows (`web/lib/sanitize.ts`, `chapters.html_clean`). The two copies have a parity test.
+- Per-novel `novels.epub_enabled` gates the EPUB build and the Audiobookshelf rescan.
+- Browser-automation testing: the automation tab is hidden, so IntersectionObserver/timers only run while it
+  renders — drive it with real scroll input + screenshots.
