@@ -85,6 +85,19 @@ describe("syncOnce", () => {
     expect(s.library?.map(n => n.id)).toEqual([1]);
   });
 
+  it("reuses the cached toc while the fetched count is unchanged, still planning downloads", async () => {
+    const { s, store } = memoryStore();
+    s.library = [novel(1)];
+    await store.setToc(1, TOC);
+    const api = fakeApi();
+    expect(await syncOnce(store, api)).toMatchObject({ downloaded: 3 });
+    expect(api.toc).not.toHaveBeenCalled();
+
+    s.library = [novel(1, { chapters_fetched: 2 })];
+    await syncOnce(store, api);
+    expect(api.toc).toHaveBeenCalledTimes(1);
+  });
+
   it("stops and reports when storage is full", async () => {
     const { store } = memoryStore();
     store.putChapters = async () => { throw new DOMException("full", "QuotaExceededError"); };
