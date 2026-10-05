@@ -35,8 +35,11 @@ SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapte
   `settings.ts` (useSyncExternalStore store; server renders defaults).
 - API: `app/api/reader/*` are thin wrappers over `lib/reader/api.ts`. Signed-out `/api/*` gets 401 JSON
   (`lib/proxyRules.ts`). `PUT /progress` requires JSON + same Origin (CSRF).
-- Chapter HTML is sanitized with DOMPurify: worker before saving (`worker/src/sanitize.js`), web on first
-  read for older rows (`web/lib/sanitize.ts`, `chapters.html_clean`). The two copies have a parity test.
+- Every rule applied to chapter HTML (DOMPurify, dropping the site's repeated "Chapter N" heading, …) lives in
+  ONE function, `clean()`: `worker/src/clean.js` + its web copy `web/lib/clean.ts` (parity test). Never clean
+  elsewhere (not in the EPUB packer, not at render). `chapters.html_clean` = the `CLEAN_VERSION` a row was
+  cleaned with. Changing a rule → bump `CLEAN_VERSION` in `clean.js` and `web/lib/cleanVersion.ts`: stale rows
+  are re-cleaned on the next reader read / EPUB build, and phones drop cached chapters (IndexedDB version).
 - Per-novel `novels.epub_enabled` gates the EPUB build and the Audiobookshelf rescan.
 - Browser-automation testing: the automation tab is hidden, so IntersectionObserver/timers only run while it
   renders — drive it with real scroll input + screenshots.

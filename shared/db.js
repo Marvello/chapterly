@@ -100,10 +100,10 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                 }
             });
         },
-        /** html must already be sanitized (worker/src/sanitize.js). */
-        saveChapter: (id, html) =>
-            run("UPDATE chapters SET html = ?, html_clean = 1, error = NULL, retry_at = NULL, fetched_at = ? WHERE id = ?",
-                html, now(), id),
+        /** html must already be cleaned (worker/src/clean.js); cleanVersion = its CLEAN_VERSION. */
+        saveChapter: (id, html, cleanVersion) =>
+            run("UPDATE chapters SET html = ?, html_clean = ?, error = NULL, retry_at = NULL, fetched_at = ? WHERE id = ?",
+                html, cleanVersion, now(), id),
         failChapter: (id, error, retryAt) =>
             run("UPDATE chapters SET error = ?, attempts = attempts + 1, retry_at = ? WHERE id = ?", error, retryAt, id),
         /** Chapter list page without html (novels can have thousands of chapters). Newest first. */
@@ -173,7 +173,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                           AND (c.idx > a.idx OR (c.idx = a.idx AND c.id > a.id))
                         ORDER BY c.idx, c.id LIMIT ?`, afterChapterId, novelId, lim);
         },
-        saveCleanHtml: (chapterId, html) => run("UPDATE chapters SET html = ?, html_clean = 1 WHERE id = ?", html, chapterId),
+        saveCleanHtml: (chapterId, html, cleanVersion) =>
+            run("UPDATE chapters SET html = ?, html_clean = ? WHERE id = ?", html, cleanVersion, chapterId),
         getProgress: (userId, novelId) => one(`
             SELECT p.novel_id AS novelId, p.chapter_id AS chapterId, c.idx, p.fraction, p.read_at AS readAt
             FROM reading_progress p JOIN chapters c ON c.id = p.chapter_id

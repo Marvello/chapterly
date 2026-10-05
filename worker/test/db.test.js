@@ -59,7 +59,7 @@ const fresh = name => path.join(tmp, name);
 
     w.addChapters(n.id, [1, 2, 3].map(i => ({ index: i, url: `https://example.com/novel/a/${i}`, title: `Ch ${i}` })));
     const [c1, c2] = w.chapters(n.id);
-    w.saveChapter(c1.id, "<p>one</p>");
+    w.saveChapter(c1.id, "<p>one</p>", 2);
     w.failChapter(c2.id, "HTTP 404", null);
     const page = w.chapterPage(n.id, 2, 0);
     assert.deepStrictEqual(page.map(c => c.idx), [3, 2], "newest first, limited");
@@ -142,11 +142,11 @@ const fresh = name => path.join(tmp, name);
         const nid = rdb.addNovel("https://example.com/novel/r").id;
         rdb.addChapters(nid, [1, 2, 2, 3, 4].map((index, i) => ({ index, url: `https://example.com/c${i}`, title: `C${i}` })));
         const rows = rdb.chapters(nid);
-        for (const c of rows.slice(0, 4)) rdb.saveChapter(c.id, `<p>${c.title}</p>`);   // C4 stays unfetched
+        for (const c of rows.slice(0, 4)) rdb.saveChapter(c.id, `<p>${c.title}</p>`, 2);   // C4 stays unfetched
 
         const toc = rdb.readerToc(nid);
         assert.deepStrictEqual(toc.map(c => c.idx), [1, 2, 2, 3], "fetched chapters only, (idx, id) order");
-        assert.ok(rdb.readerChapters(nid, null, 10).every(c => c.html_clean === 1), "saveChapter marks html clean");
+        assert.ok(rdb.readerChapters(nid, null, 10).every(c => c.html_clean === 2), "saveChapter records the clean version");
 
         // paging after a duplicate idx: no skip, no repeat
         assert.deepStrictEqual(rdb.readerChapters(nid, toc[1].id, 10).map(c => c.id), [toc[2].id, toc[3].id]);
@@ -176,7 +176,7 @@ const fresh = name => path.join(tmp, name);
         assert.throws(() => rdb.saveProgress(u.id, { novelId: other, chapterId: toc[0].id, fraction: 0,
             readAt: new Date().toISOString(), force: false }), /not in novel/);
 
-        rdb.saveCleanHtml(toc[0].id, "<p>clean</p>");
+        rdb.saveCleanHtml(toc[0].id, "<p>clean</p>", 2);
         assert.strictEqual(rdb.readerChapters(nid, null, 1)[0].html, "<p>clean</p>");
 
         assert.strictEqual(rdb.getNovel(nid).epub_enabled, 1, "EPUB on by default");

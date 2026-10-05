@@ -29,7 +29,7 @@ export interface UserRow {
 }
 export interface ReaderPosition { novelId: number; chapterId: number; idx: number; fraction: number; readAt: string }
 export interface TocEntry { id: number; idx: number; title: string | null }
-export interface ReaderChapterRow extends TocEntry { novel_id: number; html: string; html_clean: 0 | 1 }
+export interface ReaderChapterRow extends TocEntry { novel_id: number; html: string; html_clean: number }   // CLEAN_VERSION it was cleaned with; 0 = never
 export interface ReaderNovel {
   id: number; title: string | null; author: string | null; cover_url: string | null; toc_url: string;
   chapters_fetched: number; unread: number | null; // null in /api/reader/library until the novel is started
@@ -62,7 +62,7 @@ export interface Db {
   readerLibrary(userId: number): ReaderNovel[];
   readerToc(novelId: number): TocEntry[];
   readerChapters(novelId: number, afterChapterId: number | null, limit: number): ReaderChapterRow[];
-  saveCleanHtml(chapterId: number, html: string): void;
+  saveCleanHtml(chapterId: number, html: string, cleanVersion: number): void;
   getProgress(userId: number, novelId: number): ReaderPosition | null;
   saveProgress(userId: number, p: ProgressInput): { saved: boolean; position: ReaderPosition | null };
   setEpubEnabled(id: number, on: boolean): void;

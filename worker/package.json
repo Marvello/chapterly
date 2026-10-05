@@ -8,7 +8,7 @@
   },
   "scripts": {
     "setup": "./setup.sh",
-    "test": "node test/diff.test.js && node test/sanitize.test.js && node test/freewebnovel.test.js && node --disable-warning=ExperimentalWarning test/db.test.js && node --disable-warning=ExperimentalWarning test/pipeline.test.js && node --disable-warning=ExperimentalWarning test/cli-user.test.js && node test/audiobookshelf.test.js",
+    "test": "node test/diff.test.js && node test/clean.test.js && node test/freewebnovel.test.js && node --disable-warning=ExperimentalWarning test/db.test.js && node --disable-warning=ExperimentalWarning test/pipeline.test.js && node --disable-warning=ExperimentalWarning test/cli-user.test.js && node test/audiobookshelf.test.js",
     "worker": "node --disable-warning=ExperimentalWarning cli.js worker"
   },
   "license": "GPL-3.0-or-later",

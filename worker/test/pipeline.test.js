@@ -7,8 +7,9 @@ const os = require("os");
 const path = require("path");
 const { createScraper } = require("../src/scraper");
 const { openDb } = require("../../shared/db");
-const { checkNovel, checkDue, isDue, nextRetryAt, resumeInterruptedChecks, syncSupportedSites } = require("../src/worker");
+const { checkNovel, checkDue, buildEpub, isDue, nextRetryAt, resumeInterruptedChecks, syncSupportedSites } = require("../src/worker");
 const { mockSite, BASE } = require("./mockSite");
+const { CLEAN_VERSION } = require("../src/clean");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "novel-test-"));
 process.env.CHAPTERLY_LIBRARY = path.join(tmp, "library");
@@ -39,22 +40,23 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.match(epub.toString("latin1"), /OEBPS\/Images\/\S+?\.jpe?g/, "cover image embedded");
     assert.deepStrictEqual(fs.readdirSync(path.dirname(n.epub_path)), ["Test Story.epub"], "no temp file left behind");
 
-    // The site's repeated "Chapter N" <h2> under WebToEpub's <h1> is dropped; a real subtitle stays.
+    // A chapter stored under older cleaning rules (here: with the site's repeated "Chapter N" <h2>) is
+    // cleaned again when the EPUB is built, and the result is kept for the reader too.
     {
         const { ZipReader, Uint8ArrayReader, TextWriter } = require("@zip.js/zip.js");
-        const buf = await s.buildEpub({ tocUrl: BASE, title: "Dup" }, [
-            { url: `${BASE}/chapter-1`, title: "Chapter 1: Scythe", html: "<h1>Chapter 1: Scythe</h1><h2>Chapter 1: Chapter 1: Scythe</h2><p>a</p>" },
-            { url: `${BASE}/chapter-2`, title: "Chapter 2: Rain", html: "<h1>Chapter 2: Rain</h1><h2>Part One</h2><p>b</p>" },
-        ]);
-        const entries = await new ZipReader(new Uint8ArrayReader(new Uint8Array(buf))).getEntries();
-        const xhtml = await Promise.all(entries.filter(e => /Text\/\d{4}_/.test(e.filename)).map(e => e.getData(new TextWriter())));
-        assert.ok(!/<h2/.test(xhtml[0]) && /<h1>Chapter 1: Scythe<\/h1>/.test(xhtml[0]), "duplicate chapter heading removed");
-        assert.match(xhtml[1], /<h2>Part One<\/h2>/, "real subtitle kept");
+        const first = db.chapters(id)[0];
+        db.saveCleanHtml(first.id, "<h1>Chapter 1: Scythe</h1><h2>Chapter 1: Chapter 1: Scythe</h2><p>a</p>", 1);
+        await buildEpub(db, s, id);
+        const entries = await new ZipReader(new Uint8ArrayReader(new Uint8Array(fs.readFileSync(n.epub_path)))).getEntries();
+        const xhtml = await entries.find(e => /Text\/0000_/.test(e.filename)).getData(new TextWriter());
+        assert.ok(!/<h2/.test(xhtml) && /<h1>Chapter 1: Scythe<\/h1>/.test(xhtml), "duplicate chapter heading removed");
+        const row = db.chapters(id)[0];
+        assert.deepStrictEqual([row.html, row.html_clean], ["<h1>Chapter 1: Scythe</h1><p>a</p>", CLEAN_VERSION], "re-clean saved");
     }
 
     // 2nd check, nothing new: no chapter fetches, EPUB not rebuilt, Audiobookshelf not asked to rescan.
     site.requests.length = 0;
-    const builtAt = n.epub_built_at;
+    const builtAt = db.getNovel(id).epub_built_at;
     const rescans = [];
     await checkNovel(db, s, db.getNovel(id), quiet, { onEpubWritten: title => rescans.push(title) });
     assert.deepStrictEqual(rescans, [], "no rescan when the EPUB didn't change");
@@ -162,7 +164,7 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     const toc = await cutScraper.getNovel(`${BASE}?cut`);          // state a crash after 2 chapters leaves:
     db.updateNovelMeta(cutId, toc);                                  // chapter list stored, 2 of 6 saved,
     db.addChapters(cutId, toc.chapters);                             // check started but never finished
-    for (const c of db.chapters(cutId).slice(0, 2)) db.saveChapter(c.id, "<p>saved before the crash</p>");
+    for (const c of db.chapters(cutId).slice(0, 2)) db.saveChapter(c.id, "<p>saved before the crash</p>", CLEAN_VERSION);
     db.markCheckStarted(cutId);
     assert.ok(!isDue(db.listNovels().find(r => r.id === cutId)), "without a resume it would wait a full interval");
 
@@ -217,7 +219,7 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     assert.deepStrictEqual([db.getNovel(id).check_failures, db.getNovel(id).check_retry_at], [0, null]);
 
     // Stored chapters are sanitized; EPUB building can be switched off per novel (and back on).
-    assert.ok(db.readerChapters(id, null, 200).every(c => c.html_clean === 1), "worker stores sanitized html");
+    assert.ok(db.readerChapters(id, null, 200).every(c => c.html_clean === CLEAN_VERSION), "worker stores cleaned html");
     db.setEpubEnabled(id, false);
     site.chapterCount = 8;
     const builtBefore = db.getNovel(id).epub_built_at;

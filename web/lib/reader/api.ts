@@ -1,5 +1,6 @@
 // Reader API logic, kept free of Next/auth so it's unit-tested; app/api/reader/* are thin wrappers.
 import type { Db, LibraryNovel, LibraryRow, ProgressInput, ReaderNovel } from "@/lib/db";
+import { CLEAN_VERSION } from "@/lib/cleanVersion";
 import { parseId } from "@/lib/validate";
 
 export type ReaderDb = Pick<Db, "getNovel" | "readerLibrary" | "readerToc" | "readerChapters" | "saveCleanHtml" | "saveProgress">;
@@ -30,7 +31,7 @@ export function toc(db: ReaderDb, rawId: string): ApiResult {
 }
 
 /** Chapters after `?after=<chapterId>` (default from the start), `?limit=` 1..200 (default 50). */
-export function chapters(db: ReaderDb, sanitize: (html: string) => string, rawId: string, params: URLSearchParams,
+export function chapters(db: ReaderDb, clean: (html: string) => string, rawId: string, params: URLSearchParams,
   log: (msg: string) => void = console.error): ApiResult {
   const id = novelId(db, rawId);
   if (!id) return err(404, "not found");
@@ -42,13 +43,13 @@ export function chapters(db: ReaderDb, sanitize: (html: string) => string, rawId
   const out = [];
   for (const r of db.readerChapters(id, after, Math.min(Number(limitRaw), 200))) {
     let html = r.html;
-    if (!r.html_clean) {
-      // Stored before the worker sanitized chapters: clean it once, now.
+    if (r.html_clean < CLEAN_VERSION) {
+      // Stored under older cleaning rules (lib/clean.ts): clean it again, once, now.
       try {
-        html = sanitize(r.html);
-        db.saveCleanHtml(r.id, html);
+        html = clean(r.html);
+        db.saveCleanHtml(r.id, html, CLEAN_VERSION);
       } catch (e) {
-        log(`reader: sanitizing chapter ${r.id} failed: ${(e as Error).message}`);
+        log(`reader: cleaning chapter ${r.id} failed: ${(e as Error).message}`);
         continue;
       }
     }

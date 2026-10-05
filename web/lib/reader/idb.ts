@@ -1,5 +1,6 @@
 // IndexedDB for the reader (browser only). Stores: chapters (key id, index [novelId, idx]),
 // tocs / library / outbox / pins (out-of-line keys).
+import { CLEAN_VERSION } from "@/lib/cleanVersion";
 import type { ReaderNovel, TocEntry } from "@/lib/db";
 import { mergeOutbox } from "./progress";
 import type { ReaderStore } from "./sync";
@@ -10,11 +11,17 @@ let opened: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   return opened ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open("chapterly-reader", 1);
-    req.onupgradeneeded = () => {
+    // Version follows CLEAN_VERSION: new cleaning rules drop the phone's chapters so sync downloads them
+    // cleaned again. (Store layout unchanged since v1; a layout change needs its own step here.)
+    const req = indexedDB.open("chapterly-reader", CLEAN_VERSION);
+    req.onupgradeneeded = e => {
       const db = req.result;
-      db.createObjectStore("chapters", { keyPath: "id" }).createIndex("novel", ["novelId", "idx"]);
-      for (const s of ["tocs", "library", "outbox", "pins"]) db.createObjectStore(s);
+      if (e.oldVersion === 0) {
+        db.createObjectStore("chapters", { keyPath: "id" }).createIndex("novel", ["novelId", "idx"]);
+        for (const s of ["tocs", "library", "outbox", "pins"]) db.createObjectStore(s);
+      } else {
+        req.transaction!.objectStore("chapters").clear();
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

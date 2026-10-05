@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
 import type { LibraryRow, ReaderChapterRow, ReaderNovel } from "@/lib/db";
+import { CLEAN_VERSION } from "@/lib/cleanVersion";
 import { chapters, libraryRows, parseProgress, putProgress, toc, type ReaderDb } from "./api";
 
 const ORIGIN = "https://chapterly.example";
 const NOW = Date.parse("2026-10-05T00:00:00Z");
-const row = (id: number, clean: 0 | 1, html = `<p>${id}</p>`): ReaderChapterRow =>
+const row = (id: number, clean: number, html = `<p>${id}</p>`): ReaderChapterRow =>
   ({ id, novel_id: 3, idx: id, title: `C${id}`, html, html_clean: clean });
 
 type FakeDb = { [K in keyof ReaderDb]: Mock<ReaderDb[K]> };
@@ -35,31 +36,31 @@ describe("toc", () => {
 });
 
 describe("chapters", () => {
-  const sanitize = (h: string) => h.replace(/<script>.*?<\/script>/g, "");
+  const clean = (h: string) => h.replace(/<script>.*?<\/script>/g, "");
   it("400 on a bad cursor or limit", () => {
-    const p = (q: string) => chapters(fakeDb(), sanitize, "3", new URLSearchParams(q)).status;
+    const p = (q: string) => chapters(fakeDb(), clean, "3", new URLSearchParams(q)).status;
     expect(p("after=x")).toBe(400);
     expect(p("limit=0")).toBe(400);
     expect(p("limit=2.5")).toBe(400);
   });
   it("defaults to 50 and caps at 200", () => {
     const db = fakeDb();
-    chapters(db, sanitize, "3", new URLSearchParams(""));
-    chapters(db, sanitize, "3", new URLSearchParams("after=5&limit=1000"));
+    chapters(db, clean, "3", new URLSearchParams(""));
+    chapters(db, clean, "3", new URLSearchParams("after=5&limit=1000"));
     expect(db.readerChapters.mock.calls).toEqual([[3, null, 50], [3, 5, 200]]);
   });
-  it("sanitizes and writes back rows that aren't clean yet; leaves clean rows alone", () => {
-    const db = fakeDb([row(1, 1), row(2, 0, "<p>2</p><script>x</script>")]);
-    const r = chapters(db, sanitize, "3", new URLSearchParams(""));
+  it("re-cleans and writes back rows cleaned under older rules; leaves current rows alone", () => {
+    const db = fakeDb([row(1, CLEAN_VERSION), row(2, CLEAN_VERSION - 1, "<p>2</p><script>x</script>")]);
+    const r = chapters(db, clean, "3", new URLSearchParams(""));
     expect(r.body).toEqual([
       { id: 1, novelId: 3, idx: 1, title: "C1", html: "<p>1</p>" },
       { id: 2, novelId: 3, idx: 2, title: "C2", html: "<p>2</p>" },
     ]);
-    expect(db.saveCleanHtml.mock.calls).toEqual([[2, "<p>2</p>"]]);
+    expect(db.saveCleanHtml.mock.calls).toEqual([[2, "<p>2</p>", CLEAN_VERSION]]);
   });
-  it("omits a row whose sanitizing throws, and logs it", () => {
+  it("omits a row whose cleaning throws, and logs it", () => {
     const log = vi.fn();
-    const r = chapters(fakeDb([row(1, 0), row(2, 1)]), () => { throw new Error("boom"); }, "3", new URLSearchParams(""), log);
+    const r = chapters(fakeDb([row(1, 0), row(2, CLEAN_VERSION)]), () => { throw new Error("boom"); }, "3", new URLSearchParams(""), log);
     expect((r.body as { id: number }[]).map(c => c.id)).toEqual([2]);
     expect(log).toHaveBeenCalledOnce();
   });

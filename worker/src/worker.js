@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { diffChapters } = require("./diff");
 const { createAbsNotifier, absConfigFromEnv } = require("./audiobookshelf");
-const { sanitize } = require("./sanitize");
+const { clean, CLEAN_VERSION } = require("./clean");
 
 const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
@@ -56,7 +56,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
             }
             try {
                 const ch = await scraper.getChapter(novel, c.url);
-                db.saveChapter(c.id, sanitize(ch.html));
+                db.saveChapter(c.id, clean(ch.html), CLEAN_VERSION);
                 log(`[${id}]   ${i + 1}/${pending.length} ${c.title || c.url}`);
             } catch (e) {
                 failed++;
@@ -94,6 +94,10 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
 async function buildEpub(db, scraper, id) {
     const n = db.getNovel(id);
     const chapters = db.chapters(id).filter(c => c.html != null);
+    for (const c of chapters) {
+        // Stored under older cleaning rules: clean again, once, and keep the result for the reader too.
+        if (c.html_clean < CLEAN_VERSION) db.saveCleanHtml(c.id, c.html = clean(c.html), CLEAN_VERSION);
+    }
     const buf = await scraper.buildEpub(
         { tocUrl: n.toc_url, title: n.title, author: n.author, language: n.language,
             subjects: n.subjects, description: n.description, cover: n.cover_url },
