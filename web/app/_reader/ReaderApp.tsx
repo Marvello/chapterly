@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { runSync } from "@/lib/reader/client";
-import { online } from "@/lib/reader/online";
+import { IdbBlockedError } from "@/lib/reader/idb";
+import { online, unreachable } from "@/lib/reader/online";
 import { AuthError } from "@/lib/reader/sync";
 import { parseId } from "@/lib/validate";
 import LibraryView from "./LibraryView";
@@ -33,11 +34,11 @@ export default function ReaderApp() {
       })
       .catch(e => {
         if (e instanceof AuthError) return routerRef.current.replace("/login");
-        // A network error or timeout: the server can't be reached, so show the offline library.
-        // (A server error still means it's there.)
-        const reachable = !(e instanceof TypeError || (e instanceof DOMException && e.name === "TimeoutError"));
+        // Can't reach the server: show the offline library. (Another server error still means it's there.)
+        const reachable = !unreachable(e);
         online.setReachable(reachable);
-        setNotice(reachable ? "Sync failed; it will retry when you come back." : null);   // offline: the page says so
+        setNotice(!reachable ? null   // offline: the page says so
+          : e instanceof IdbBlockedError ? e.message : "Sync failed; it will retry when you come back.");
       });
   }, []);
 

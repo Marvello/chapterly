@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { BookOpen, LogOut } from "lucide-react";
-import { signOutAction } from "@/app/actions";
+import { BookOpen } from "lucide-react";
+import SignOutButton from "@/components/SignOutButton";
 
 export default function Header({ signOut = true }: { signOut?: boolean }) {
   return (
@@ -8,13 +8,7 @@ export default function Header({ signOut = true }: { signOut?: boolean }) {
       <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-tprimary">
         <BookOpen className="size-5 text-accent" /> Chapterly
       </Link>
-      {signOut && (
-        <form action={signOutAction}>
-          <button className="flex items-center gap-1 text-sm text-tmuted hover:text-tprimary" aria-label="Sign out">
-            <LogOut className="size-4" /> <span className="hidden sm:inline">Sign out</span>
-          </button>
-        </form>
-      )}
+      {signOut && <SignOutButton />}
     </header>
   );
 }

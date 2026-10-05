@@ -30,3 +30,9 @@ export const online = {
     notify();
   },
 };
+
+/** A failed sync that means "can't reach the server": no answer (network error, timeout) or a gateway
+ * answering for it (Cloudflare 502/503/504/530 while the home server is down but the tunnel is up). */
+export const unreachable = (e: unknown) =>
+  e instanceof TypeError || (e instanceof DOMException && e.name === "TimeoutError") ||
+  (e instanceof Error && / HTTP (502|503|504|530)$/.test(e.message));

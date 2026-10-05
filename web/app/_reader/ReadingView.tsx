@@ -9,6 +9,7 @@ import { go, runSync } from "@/lib/reader/client";
 import { fetchChapter } from "@/lib/reader/fetchChapter";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
+import { chapterLabel } from "@/lib/reader/label";
 import { decide, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import { positionFromScroll } from "@/lib/reader/scroll";
 import { THEMES, settingsStore, type ReaderSettings } from "@/lib/reader/settings";
@@ -49,6 +50,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const opened = useRef(false);                                        // the initial open runs once (deps change with the URL)
   const loading = useRef(false);
   const root = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const updateSettings = (p: Partial<ReaderSettings>) => settingsStore.set({ ...settings, ...p });
@@ -69,7 +71,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
       if (fresh !== list) setToc(fresh);
       restoreTo.current = { chapterId: entry.id, fraction };
       setBlocks([block]);
-      setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
+      setChapterTitle(chapterLabel(entry));
     } catch (e) {
       onLoadError(e);
     }
@@ -106,7 +108,9 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     if (r) {
       const el = root.current?.querySelector<HTMLElement>(`[data-chapter="${r.chapterId}"]`);
       if (el) {
-        window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + r.fraction * el.offsetHeight);
+        // below the fixed top bar, not under it
+        window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + r.fraction * el.offsetHeight
+          - (header.current?.offsetHeight ?? 0));
         restoreTo.current = null;
       }
     }
@@ -174,8 +178,9 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     const cur = currentPosition();
     if (!cur) return;
     const entry = toc.find(c => c.id === cur.chapterId);
-    if (entry) setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
-    if (new URLSearchParams(window.location.search).get("chapter") !== String(cur.chapterId)) {
+    if (entry) setChapterTitle(chapterLabel(entry));
+    const inUrl = new URLSearchParams(window.location.search).get("chapter");
+    if (inUrl && inUrl !== String(cur.chapterId)) {   // no chapter: we're being left (track at unmount)
       window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${cur.chapterId}`);
     }
     const d = decide(cur, saved.current);
@@ -198,6 +203,9 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     document.addEventListener("visibilitychange", onHide);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onHide); };
   }, [track]);
+  // Leaving (Back, system back): save the spot reached since the last 5 s tick. A layout cleanup runs
+  // while the chapters are still in the DOM.
+  useLayoutEffect(() => () => { track(); }, [track]);
 
   useEffect(() => {
     let last = window.scrollY;
@@ -229,7 +237,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
 
   return (
     <div style={{ ...theme, fontSize: settings.fontSize, lineHeight: settings.lineHeight }} className="min-h-screen">
-      <header className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
+      <header ref={header} className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
         style={{ background: theme.background, borderBottom: "1px solid rgba(127,127,127,.25)" }}>
         <button onClick={() => go(`/?novel=${novelId}`)} aria-label="Back to chapters"><ArrowLeft className="size-5" /></button>
         <div className="min-w-0 flex-1 leading-tight">
@@ -268,13 +276,13 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
         {toc.length === 0 && <p className="opacity-70">This novel isn&apos;t on the phone yet. Connect once to load it.</p>}
         {prev && (
           <button onClick={() => openAt(prev, toc)} className="mb-8 block text-sm opacity-70 underline">
-            ← {prev.title ?? `Chapter ${prev.idx}`}
+            ← {chapterLabel(prev)}
           </button>
         )}
         {blocks.map(b => (
           <article key={b.id} data-chapter={b.id} data-idx={b.idx} className="reader-content mb-16">
             {b.html === null
-              ? <p className="opacity-70">{b.title ?? `Chapter ${b.idx}`}: not downloaded. Connect to load it.</p>
+              ? <p className="opacity-70">{chapterLabel(b)}: not downloaded. Connect to load it.</p>
               : <div dangerouslySetInnerHTML={{ __html: b.html }} />}
           </article>
         ))}
@@ -286,7 +294,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
         <div className="fixed inset-x-2 bottom-3 z-20 mx-auto max-w-xl rounded-xl p-3 text-sm shadow-lg"
           style={{ background: theme.background, border: "1px solid rgba(127,127,127,.35)" }} role="status">
           <div className="mb-2 flex items-start justify-between gap-2">
-            <p>Your progress is at {toc.find(c => c.id === banner.chapterId)?.title ?? `Chapter ${banner.idx}`} ({Math.round(banner.fraction * 100)}%).</p>
+            <p>Your progress is at {chapterLabel(toc.find(c => c.id === banner.chapterId) ?? banner)} ({Math.round(banner.fraction * 100)}%).</p>
             <button onClick={() => { dismissed.current = true; setBanner(null); }} aria-label="Dismiss"><X className="size-4" /></button>
           </div>
           <div className="flex gap-2">

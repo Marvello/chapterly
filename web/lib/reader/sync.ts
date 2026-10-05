@@ -60,7 +60,10 @@ export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flush
 
   const lib = await api.library();
   const ids = new Set(lib.map(n => n.id));
-  for (const n of (await store.getLibrary()) ?? []) if (!ids.has(n.id)) await store.deleteNovel(n.id);
+  const prev = (await store.getLibrary()) ?? [];
+  for (const n of prev) if (!ids.has(n.id)) await store.deleteNovel(n.id);
+  // The toc lists fetched chapters, so an unchanged count means the cached one is still current.
+  const fetchedBefore = new Map(prev.map(n => [n.id, n.chapters_fetched]));
   for (const id of await store.pins()) if (!ids.has(id)) await store.deleteNovel(id);
   await store.setLibrary(lib);
 
@@ -70,8 +73,11 @@ export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flush
     for (const n of lib) {
       const progress = savedFromLibrary(n), pinned = pins.has(n.id);
       if (!progress && !pinned) continue;
-      const toc = await api.toc(n.id);
-      await store.setToc(n.id, toc);
+      let toc = fetchedBefore.get(n.id) === n.chapters_fetched ? await store.getToc(n.id) : undefined;
+      if (!toc) {
+        toc = await api.toc(n.id);
+        await store.setToc(n.id, toc);
+      }
       const plan = planCache(toc, await store.cachedChapterIds(n.id), progress, pinned);
       if (plan.evict.length) await store.deleteChapters(plan.evict);
       for (const f of plan.fetch) {

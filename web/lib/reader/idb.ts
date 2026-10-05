@@ -7,13 +7,18 @@ import type { ReaderStore } from "./sync";
 import type { OutboxEntry, StoredChapter } from "./types";
 
 type StoreName = "chapters" | "tocs" | "library" | "outbox" | "pins";
+const DB = "chapterly-reader";
 let opened: Promise<IDBDatabase> | null = null;
+
+/** The database needs upgrading but another tab/window (or the installed app) still has the old version open. */
+export class IdbBlockedError extends Error {}
 
 function open(): Promise<IDBDatabase> {
   return opened ??= new Promise((resolve, reject) => {
     // Version follows CLEAN_VERSION: new cleaning rules drop the phone's chapters so sync downloads them
     // cleaned again. (Store layout unchanged since v1; a layout change needs its own step here.)
-    const req = indexedDB.open("chapterly-reader", CLEAN_VERSION);
+    const req = indexedDB.open(DB, CLEAN_VERSION);
+    let blocked = false;
     req.onupgradeneeded = e => {
       const db = req.result;
       if (e.oldVersion === 0) {
@@ -23,8 +28,20 @@ function open(): Promise<IDBDatabase> {
         req.transaction!.objectStore("chapters").clear();
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (blocked) return db.close();   // we already gave up on this request; the next call opens afresh
+      // A newer version (another tab after a deploy) or sign-out's delete: let go instead of blocking it.
+      db.onversionchange = () => { db.close(); opened = null; };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
+    // Without this the open waits silently (blank app) until the other tab lets go.
+    req.onblocked = () => {
+      blocked = true;
+      opened = null;
+      reject(new IdbBlockedError("Chapterly was updated: close its other tabs or windows to finish."));
+    };
   });
 }
 
@@ -68,8 +85,15 @@ export function idbStore(): ReaderStore {
     deleteChapters: ids => many("chapters", os => { for (const id of ids) os.delete(id); }),
     outbox: async () => (await done((await store("outbox", "readonly")).getAll())) as OutboxEntry[],
     getOutbox: id => get<OutboxEntry>("outbox", id),
-    async queue(e) { await put("outbox", mergeOutbox(await get<OutboxEntry>("outbox", e.novelId), e), e.novelId); },
-    async clearOutbox(id, readAt) { if ((await get<OutboxEntry>("outbox", id))?.readAt === readAt) await del("outbox", id); },
+    // Read and write in one transaction, so an entry queued in between can't be lost.
+    queue: e => many("outbox", os => {
+      const r = os.get(e.novelId);
+      r.onsuccess = () => os.put(mergeOutbox(r.result, e), e.novelId);
+    }),
+    clearOutbox: (id, readAt) => many("outbox", os => {
+      const r = os.get(id);
+      r.onsuccess = () => { if ((r.result as OutboxEntry | undefined)?.readAt === readAt) os.delete(id); };
+    }),
     pins: async () => new Set((await done((await store("pins", "readonly")).getAllKeys())) as number[]),
     setPin: (id, on) => (on ? put("pins", true, id) : del("pins", id)),
     async deleteNovel(id) {
@@ -80,4 +104,17 @@ export function idbStore(): ReaderStore {
       await del("pins", id);
     },
   };
+}
+
+/** Sign-out: drop what this user left on the device (library, chapters, unsent progress), so the next
+ * user neither sees it nor sends that progress under their own account. */
+export async function deleteReaderDb() {
+  const db = await opened?.catch(() => null);
+  opened = null;
+  db?.close();
+  await new Promise<void>(resolve => {
+    const req = indexedDB.deleteDatabase(DB);
+    // blocked: an old tab still holds it; the delete then completes as soon as that tab lets go.
+    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+  });
 }
