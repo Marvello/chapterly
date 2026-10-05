@@ -1,7 +1,7 @@
 import type { LibraryRow } from "@/lib/db";
 import { displayTitle, novelStatus, relativeTime } from "@/lib/view";
 import ReaderLink from "./ReaderLink";
-import StatusBadge from "./StatusBadge";
+import StatusBadge, { NewDot, UnreadPill } from "./StatusBadge";
 
 /** Compact one-line-per-novel layout for large libraries. */
 export default function NovelTable({ novels, online = true }: { novels: LibraryRow[]; online?: boolean }) {
@@ -21,14 +21,18 @@ export default function NovelTable({ novels, online = true }: { novels: LibraryR
           {novels.map(n => (
             <tr key={n.id} className="border-b border-edge last:border-0 hover:bg-page/40">
               <td className="truncate px-3 py-2">
+                {n.chapters_new > 0 && <NewDot count={n.chapters_new} className="mr-1.5 align-middle" />}
                 <ReaderLink href={`/?novel=${n.id}`} className="text-tprimary hover:text-accent">{displayTitle(n)}</ReaderLink>
               </td>
               <td className="hidden truncate px-3 py-2 text-tmuted md:table-cell">{n.author}</td>
               <td className="px-3 py-2 tabular-nums text-tmuted">
-                {n.chapters_fetched}/{n.chapters_total}
-                {n.chapters_new > 0 && <span className="ml-1.5 rounded bg-accent px-1 text-xs font-medium text-page">+{n.chapters_new}</span>}
-                {!!n.unread && <span className="mt-0.5 block w-fit whitespace-nowrap rounded border border-accent px-1 text-xs font-medium text-accent">{n.unread} unread</span>}
-                {online && n.chapters_failing > 0 && <span className="ml-1.5 text-xs text-critical">{n.chapters_failing}✗</span>}
+                {n.chapters_fetched}/{n.chapters_total}<span className="sr-only"> fetched</span>
+                {online && n.chapters_failing > 0 && (
+                  <span className="ml-1.5 text-xs text-critical" title={`${n.chapters_failing} failing`}>
+                    {n.chapters_failing}<span aria-hidden>✗</span><span className="sr-only"> failing</span>
+                  </span>
+                )}
+                {!!n.unread && <UnreadPill count={n.unread} className="mt-0.5 block w-fit" />}
               </td>
               <td className="hidden px-3 py-2 text-tmuted sm:table-cell">{online && relativeTime(n.last_checked_at)}</td>
               <td className="px-3 py-2 text-right">{online && <StatusBadge status={novelStatus(n)} />}</td>

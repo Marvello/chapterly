@@ -128,8 +128,8 @@ export default async function NovelPage({ params, searchParams }:
               {c.fetched
                 ? <span className="flex shrink-0 items-center gap-1 text-xs text-tmuted"><Check className="size-3 text-good" />{relativeTime(c.fetched_at)}</span>
                 : c.error
-                  ? <AlertTriangle className="size-4 shrink-0 text-critical" aria-label="failed" />
-                  : <Clock className="size-4 shrink-0 text-tmuted" aria-label="pending" />}
+                  ? <AlertTriangle role="img" className="size-4 shrink-0 text-critical" aria-label="failed" />
+                  : <Clock role="img" className="size-4 shrink-0 text-tmuted" aria-label="pending" />}
             </li>
           ))}
         </ul>
