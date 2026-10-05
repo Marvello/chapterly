@@ -1,14 +1,14 @@
-// Chapterly reader service worker: keeps the /read app shell so the reader opens offline.
+// Chapterly service worker: keeps the app shell (/, the library + reader page) so it opens offline.
 // Chapters are not cached here — the reader stores them in IndexedDB itself.
 // ponytail: hashed /_next/static files from old deploys pile up in this cache; bump CACHE to clear them.
-const CACHE = "chapterly-shell-v1";
+const CACHE = "chapterly-shell-v2";
 
 async function cacheShell() {
   const cache = await caches.open(CACHE);
-  const res = await fetch("/read");
+  const res = await fetch("/");
   if (!res.ok || res.redirected) return;   // signed out: nothing worth caching
   const html = await res.clone().text();
-  await cache.put("/read", res);
+  await cache.put("/", res);
   const assets = [...html.matchAll(/(?:src|href)="(\/_next\/static\/[^"]+)"/g)].map(m => m[1]);
   await cache.addAll([...new Set(assets)]);
 }
@@ -29,14 +29,14 @@ self.addEventListener("fetch", e => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
       return res;
     })));
-  } else if (e.request.mode === "navigate" && url.pathname === "/read") {
+  } else if (e.request.mode === "navigate" && url.pathname === "/") {
     // The shell: network first (fresh deploys), cached copy when offline — or when the network is too
     // slow to answer within 4 s (connected but passing nothing). A late answer still refreshes the cache.
     const network = fetch(e.request).then(res => {
-      if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("/read", copy)); }
+      if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("/", copy)); }
       return res;
     });
-    const cached = () => caches.match("/read");
+    const cached = () => caches.match("/");
     const slow = new Promise(resolve => setTimeout(resolve, 4000)).then(cached);
     e.respondWith(Promise.race([network, slow])
       .then(res => res || network)

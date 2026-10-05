@@ -38,7 +38,7 @@ export function chapterState(c: TocEntry, saved: Position | null): "read" | "cur
 
 /** Started novels with unread chapters first (most recently read first), then the rest by title. */
 export function sortReaderLibrary(list: ReaderNovel[]): ReaderNovel[] {
-  const reading = (n: ReaderNovel) => n.progress_chapter_id !== null && n.unread > 0;
+  const reading = (n: ReaderNovel) => n.progress_chapter_id !== null && (n.unread ?? 0) > 0;
   return [...list].sort((a, b) =>
     Number(reading(b)) - Number(reading(a)) ||
     (reading(a) ? (b.read_at ?? "").localeCompare(a.read_at ?? "") : 0) ||

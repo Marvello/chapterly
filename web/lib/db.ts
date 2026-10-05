@@ -32,9 +32,11 @@ export interface TocEntry { id: number; idx: number; title: string | null }
 export interface ReaderChapterRow extends TocEntry { novel_id: number; html: string; html_clean: 0 | 1 }
 export interface ReaderNovel {
   id: number; title: string | null; author: string | null; cover_url: string | null; toc_url: string;
-  chapters_fetched: number; unread: number;
+  chapters_fetched: number; unread: number | null; // null in /api/reader/library until the novel is started
   progress_chapter_id: number | null; progress_idx: number | null; progress_fraction: number | null; read_at: string | null;
 }
+/** One row of the merged library (the phone caches these): management fields + reading progress. */
+export type LibraryNovel = Omit<LibraryRow, "unread"> & ReaderNovel;
 export interface ProgressInput { novelId: number; chapterId: number; fraction: number; readAt: string; force: boolean }
 export interface Db {
   addNovel(url: string): NovelRow;

@@ -22,9 +22,13 @@ README.md has the full setup, env vars and CLI.
 ## Deploy
 Runs on tower (homeserver); deploy steps and paths are in `../common-tech/memory/homeserver/app-chapterly.md`.
 
-## Reader (web/app/read, web/lib/reader)
-- `/read` is one client-rendered page; views switch by query string via `history.pushState` so the service
-  worker (`public/sw.js`) can cache it as one shell. Chapters live in IndexedDB (`lib/reader/idb.ts`), not
+## Library + reader (web/app/_reader, web/lib/reader)
+- `/` is one client-rendered page (library, novel, reading views; `/read` redirects there); views switch by
+  query string via `history.pushState` so the service worker (`public/sw.js`) can cache it as one shell.
+  The library renders from the phone's cached `/api/reader/library` (full rows + progress) and hides
+  server-only parts (add, sign-out, check status, Manage link) while `lib/reader/online.ts` says the server
+  is unreachable (no network, or the last sync failed with a network error/timeout). Layout choice is
+  per-device (`viewPref.ts`, localStorage); the novel management page `/novels/[id]` stays server-rendered. Chapters live in IndexedDB (`lib/reader/idb.ts`), not
   the SW cache. Logic is pure and tested: `progress.ts` (forward-only rules; "behind" = an earlier chapter),
   `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads, in-memory store tests),
   `settings.ts` (useSyncExternalStore store; server renders defaults).

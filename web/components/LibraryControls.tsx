@@ -1,6 +1,6 @@
 "use client";
 import { Search } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { LIBRARY_FILTERS, LIBRARY_SORTS, type LibraryQuery } from "@/lib/view";
 
@@ -8,9 +8,9 @@ const DEFAULTS: LibraryQuery = { sort: "new", filter: "all", q: "" };
 const select = "rounded-lg border border-edge bg-component px-2 py-1 text-sm text-tprimary";
 
 /** Sort / filter / search for the library, kept in the URL (?sort=&filter=&q=). Sort and filter changes
- * add a history entry (Back undoes them); typing replaces it, so Back doesn't step through every letter. */
+ * add a history entry (Back undoes them); typing replaces it, so Back doesn't step through every letter.
+ * The library is client-rendered, so this only rewrites the URL (pushState: works offline). */
 export default function LibraryControls({ query }: { query: LibraryQuery }) {
-  const router = useRouter();
   const pathname = usePathname();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The box follows the URL when ?q= changes (back/forward), but not while you're still typing.
@@ -27,7 +27,7 @@ export default function LibraryControls({ query }: { query: LibraryQuery }) {
     const params = new URLSearchParams();
     for (const k of ["sort", "filter", "q"] as const) if (next[k] && next[k] !== DEFAULTS[k]) params.set(k, next[k]);
     const qs = params.toString();
-    router[history](qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    window.history[history === "push" ? "pushState" : "replaceState"](null, "", qs ? `${pathname}?${qs}` : pathname);
   };
   const search = (q: string) => {
     setText(q);

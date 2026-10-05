@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Chapterly",
     short_name: "Chapterly",
-    start_url: "/read",
+    start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: "#0b1120",

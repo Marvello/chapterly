@@ -4,10 +4,10 @@ import { useActionState, useEffect, useRef } from "react";
 import { Plus } from "lucide-react";
 import { addNovelAction, type AddState } from "@/app/actions";
 
-export default function AddNovelForm() {
+export default function AddNovelForm({ onAdded }: { onAdded?: () => void }) {
   const [state, action, pending] = useActionState<AddState, FormData>(addNovelAction, undefined);
   const form = useRef<HTMLFormElement>(null);
-  useEffect(() => { if (state?.ok) form.current?.reset(); }, [state]);
+  useEffect(() => { if (state?.ok) { form.current?.reset(); onAdded?.(); } }, [state, onAdded]);
   return (
     <form ref={form} action={action} className="mb-6">
       <div className="flex gap-2">

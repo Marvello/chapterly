@@ -70,7 +70,7 @@ export default async function NovelPage({ params, searchParams }:
       </section>
 
       <section className="mb-6 flex flex-wrap items-center gap-2">
-        <Link href={`/read?novel=${n.id}`} className={btn}>
+        <Link href={`/?novel=${n.id}`} className={btn}>
           <BookOpenText className="size-4" /> Read{unread ? ` · ${unread} unread` : ""}
         </Link>
         {n.status === "active" && (

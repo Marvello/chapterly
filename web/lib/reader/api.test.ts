@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
-import type { ReaderChapterRow } from "@/lib/db";
-import { chapters, parseProgress, putProgress, toc, type ReaderDb } from "./api";
+import type { LibraryRow, ReaderChapterRow, ReaderNovel } from "@/lib/db";
+import { chapters, libraryRows, parseProgress, putProgress, toc, type ReaderDb } from "./api";
 
 const ORIGIN = "https://chapterly.example";
 const NOW = Date.parse("2026-10-05T00:00:00Z");
@@ -96,5 +96,19 @@ describe("putProgress", () => {
     expect(putProgress(db, 42, headers(), body(), ORIGIN, NOW)).toEqual({ status: 200, body: { saved: true, position: null } });
     expect(db.saveProgress).toHaveBeenCalledWith(42,
       { novelId: 3, chapterId: 7, fraction: 0.5, readAt: "2026-10-04T23:00:00.000Z", force: false });
+  });
+});
+
+describe("libraryRows", () => {
+  it("adds reading progress to each library row; unread only once the novel is started", () => {
+    const list = [{ id: 1, title: "A" }, { id: 2, title: "B" }] as LibraryRow[];
+    const reading = [
+      { id: 1, unread: 4, progress_chapter_id: 9, progress_idx: 9, progress_fraction: 0.5, read_at: "2026-10-05T00:00:00Z" },
+      { id: 2, unread: 7, progress_chapter_id: null, progress_idx: null, progress_fraction: null, read_at: null },
+    ] as ReaderNovel[];
+    expect(libraryRows(list, reading)).toEqual([
+      { id: 1, title: "A", unread: 4, progress_chapter_id: 9, progress_idx: 9, progress_fraction: 0.5, read_at: "2026-10-05T00:00:00Z" },
+      { id: 2, title: "B", unread: null, progress_chapter_id: null, progress_idx: null, progress_fraction: null, read_at: null },
+    ]);
   });
 });

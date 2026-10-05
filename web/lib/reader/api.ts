@@ -1,5 +1,5 @@
 // Reader API logic, kept free of Next/auth so it's unit-tested; app/api/reader/* are thin wrappers.
-import type { Db, ProgressInput } from "@/lib/db";
+import type { Db, LibraryNovel, LibraryRow, ProgressInput, ReaderNovel } from "@/lib/db";
 import { parseId } from "@/lib/validate";
 
 export type ReaderDb = Pick<Db, "getNovel" | "readerLibrary" | "readerToc" | "readerChapters" | "saveCleanHtml" | "saveProgress">;
@@ -11,6 +11,17 @@ export const json = (r: ApiResult) => Response.json(r.body, { status: r.status, 
 function novelId(db: ReaderDb, raw: string): number | null {
   const id = parseId(raw);
   return id && db.getNovel(id) ? id : null;
+}
+
+/** The library as the phone caches it: each row plus this user's progress; unread once started. */
+export function libraryRows(list: LibraryRow[], reading: ReaderNovel[]): LibraryNovel[] {
+  const byId = new Map(reading.map(r => [r.id, r]));
+  return list.map(n => {
+    const r = byId.get(n.id);
+    const started = r?.progress_chapter_id != null;
+    return { ...n, unread: started ? r!.unread : null, progress_chapter_id: r?.progress_chapter_id ?? null,
+      progress_idx: r?.progress_idx ?? null, progress_fraction: r?.progress_fraction ?? null, read_at: r?.read_at ?? null };
+  });
 }
 
 export function toc(db: ReaderDb, rawId: string): ApiResult {

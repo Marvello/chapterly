@@ -176,7 +176,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     const entry = toc.find(c => c.id === cur.chapterId);
     if (entry) setChapterTitle(entry.title ?? `Chapter ${entry.idx}`);
     if (new URLSearchParams(window.location.search).get("chapter") !== String(cur.chapterId)) {
-      window.history.replaceState(null, "", `/read?novel=${novelId}&chapter=${cur.chapterId}`);
+      window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${cur.chapterId}`);
     }
     const d = decide(cur, saved.current);
     if (d === "save") {
@@ -219,7 +219,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     if (!s || !entry) return;
     setBanner(null);
     await openAt(entry, toc, s.fraction);
-    window.history.replaceState(null, "", `/read?novel=${novelId}&chapter=${entry.id}`);
+    window.history.replaceState(null, "", `/?novel=${novelId}&chapter=${entry.id}`);
   };
 
   const first = blocks[0];
@@ -231,7 +231,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     <div style={{ ...theme, fontSize: settings.fontSize, lineHeight: settings.lineHeight }} className="min-h-screen">
       <header className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
         style={{ background: theme.background, borderBottom: "1px solid rgba(127,127,127,.25)" }}>
-        <button onClick={() => go(`/read?novel=${novelId}`)} aria-label="Back to chapters"><ArrowLeft className="size-5" /></button>
+        <button onClick={() => go(`/?novel=${novelId}`)} aria-label="Back to chapters"><ArrowLeft className="size-5" /></button>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate font-medium">{novelTitle}</p>
           <p className="truncate opacity-70">{chapterTitle}</p>

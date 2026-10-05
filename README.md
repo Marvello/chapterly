@@ -36,8 +36,9 @@ is fine. Change the password with `cli.js user:password <email>` (logs out every
 listens on all host interfaces (see Deploy). Every CLI command below also works via `docker compose exec worker node cli.js …`.
 
 ### Reader (phone)
-Open `/read` (or "Reader" in the header) and use Chrome's "Install app" to put it on the home screen.
-It shows the chapters straight from the DB. Progress is saved per novel and only moves forward on its own:
+The library page is also the reader: tap a novel to read it. Use Chrome's "Install app" to put it on the
+home screen; it opens offline from what's saved on the phone (adding novels, check status and the novel's
+management page need the server and are hidden while it can't be reached). Chapters come straight from the DB. Progress is saved per novel and only moves forward on its own:
 opening an earlier chapter shows "Your progress is at …" with **Set progress here** / **Go to it**. The
 current chapter plus the next 50 unread of every novel you're reading are kept on the phone for offline
 reading; "Download unread" on a novel keeps all of them. EPUB building for Audiobookshelf can be switched

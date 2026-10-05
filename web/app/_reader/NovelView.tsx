@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, CloudOff, Download } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import { ArrowLeft, CloudOff, Download, Settings2 } from "lucide-react";
 import type { ReaderNovel, TocEntry } from "@/lib/db";
 import { go, runSync } from "@/lib/reader/client";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
+import { online } from "@/lib/reader/online";
 import { chapterState, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import type { Position } from "@/lib/reader/types";
 
@@ -25,6 +27,7 @@ async function readState(novelId: number): Promise<State> {
 export default function NovelView({ novelId, rev }: { novelId: number; rev: number }) {
   const [state, setState] = useState<State | null>(null);
   const current = useRef<HTMLLIElement>(null);
+  const isOnline = useSyncExternalStore(online.subscribe, online.get, online.getServer);
 
   const load = useCallback(async () => setState(await readState(novelId)), [novelId]);
 
@@ -48,18 +51,24 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
   return (
     <main className="mx-auto max-w-2xl p-4">
       <header className="mb-4 flex items-center gap-2">
-        <button onClick={() => go("/read")} aria-label="Back" className="text-tmuted hover:text-tprimary"><ArrowLeft className="size-5" /></button>
+        <button onClick={() => go("/")} aria-label="Back" className="text-tmuted hover:text-tprimary"><ArrowLeft className="size-5" /></button>
         <h1 className="truncate text-lg font-semibold text-tprimary">{novel?.title ?? "Novel"}</h1>
       </header>
       <div className="mb-4 flex flex-wrap gap-2">
         {start && (
-          <button onClick={() => go(`/read?novel=${novelId}&chapter=${start}`)}
+          <button onClick={() => go(`/?novel=${novelId}&chapter=${start}`)}
             className="rounded-lg bg-accent px-4 py-2 font-medium text-page">{saved ? "Continue" : "Start reading"}</button>
         )}
         <button onClick={togglePin} aria-pressed={pinned}
           className={`flex items-center gap-1 rounded-lg border px-3 py-2 text-sm ${pinned ? "border-accent text-accent" : "border-edge text-tprimary"}`}>
           <Download className="size-4" /> Download unread
         </button>
+        {/* Check now, pause, interval, EPUB, delete: server-rendered, so online only. */}
+        {isOnline && (
+          <Link href={`/novels/${novelId}`} className="flex items-center gap-1 rounded-lg border border-edge px-3 py-2 text-sm text-tprimary">
+            <Settings2 className="size-4" /> Manage
+          </Link>
+        )}
       </div>
       {toc.length === 0
         ? <p className="text-tmuted">This novel isn&apos;t on the phone yet. Connect once to load it.</p>
@@ -70,7 +79,7 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
               return (
                 <li key={c.id} ref={c.id === saved?.chapterId ? current : undefined}
                   style={{ contentVisibility: "auto", containIntrinsicSize: "auto 44px" }}>
-                  <button onClick={() => go(`/read?novel=${novelId}&chapter=${c.id}`)}
+                  <button onClick={() => go(`/?novel=${novelId}&chapter=${c.id}`)}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm ${
                       s === "read" ? "text-tmuted" : s === "current" ? "text-accent" : "font-medium text-tprimary"}`}>
                     <span className="truncate">{c.title ?? `Chapter ${c.idx}`}</span>

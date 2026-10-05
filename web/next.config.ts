@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: import.meta.dirname, // standalone server.js at the image root
   experimental: { serverActions: { bodySizeLimit: "64kb" } }, // security.md #11
+  // The reader used to live at /read; it is now the library page itself (query string is kept).
+  async redirects() {
+    return [{ source: "/read", destination: "/", permanent: false }];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
