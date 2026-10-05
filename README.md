@@ -97,9 +97,10 @@ arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterl
   check started ≥ `check_interval_min` (default 1440 = once a day) ago, one novel at a time. New chapters are
   fetched one by one with the parser's throttle and saved as they arrive, so a crash loses nothing.
   A failed chapter stays pending and is retried with exponential backoff: after the nth failure it
-  waits `CHAPTERLY_RETRY_BASE_MIN × 2^(n-1)` (default 1h, 2h, 4h, 8h); after `CHAPTERLY_MAX_ATTEMPTS` (5)
+  waits `CHAPTERLY_RETRY_BASE_MIN × 2^(n-1)` (default 1h, 2h, 4h, 8h; any wait capped at 7 days); after `CHAPTERLY_MAX_ATTEMPTS` (5)
   it stops and `list` shows the error. `node cli.js retry <id>` resets it. A novel is checked as soon as
-  one of its chapters' retry is due, so the backoff applies even with daily checks. (Within a single check,
+  one of its chapters' retry is due, so the backoff applies even with daily checks — unless the whole check
+  is backing off (site down), which holds chapter retries back. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.) Each HTTP request times out after
   `CHAPTERLY_FETCH_TIMEOUT_SEC` (default 120); a timeout counts as a failed attempt. The worker refuses
   to fetch private/loopback/link-local/CGNAT addresses (also after redirects) and responses over 20 MB;
@@ -108,7 +109,10 @@ arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterl
   later, so a site that's down at the same hour every day doesn't block the novel forever.
 - **Restarts:** on startup the worker resumes any check it was stopped in the middle of (restart,
   redeploy, crash) right away instead of after the novel's interval, fetching only the chapters it hadn't
-  saved. "Check now" requests (these, or the UI button) run before routine scheduled checks.
+  saved. An interrupted check counts as a failed check: resumed at once the first time, backed off if it's
+  interrupted again (so a novel that crashes the worker can't crash-loop it). "Check now" requests (these, or
+  the UI button) run before routine scheduled checks. The novel page warns when the worker hasn't been seen
+  for 3 ticks (min 10 min).
 - **Story status:** each novel is ongoing / completed / dropped — read from the site's `og:novel:status`
   tag on every check, unless you set it yourself (novel page or `cli.js series <id> <status>`), after
   which the site never overrides it. Completed + every chapter fetched → no more scheduled checks
@@ -187,9 +191,7 @@ Cloudflare's bot check on freewebnovel without cookies. If a site still blocks, 
   novel's original translator site over aggregators when WebToEpub supports it.
 
 ## Next
-1. **Crash-loop guard:** a check that crashes the worker is resumed on every restart; stop resuming the
-   same novel after a few consecutive crashes.
-2. **Library pagination** (a couple of hundred novels+). The library query counts chapters per novel on
-   every load, so at that size also store the counts on the novel row; pagination alone won't fix that.
-3. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
+1. **Library pagination** (a couple of hundred novels+). The library query counts chapters per novel on
+   every load (covering index since 008); at that size also store the counts on the novel row.
+2. **Playwright fallback** per novel (`fetch_mode: http|browser`) for JS-rendered sites or
    interactive Cloudflare challenges.

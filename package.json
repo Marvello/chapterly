@@ -4,6 +4,6 @@
   "description": "Web novel manager: worker (scraper + scheduler + CLI) and web UI sharing one SQLite DB",
   "scripts": {
     "test": "npm --prefix worker test && npm --prefix web test",
-    "setup": "worker/setup.sh && npm --prefix web install"
+    "setup": "worker/setup.sh && npm --prefix web ci"
   }
 }

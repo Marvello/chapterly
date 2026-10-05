@@ -34,7 +34,7 @@ function createScraper(opts = {}) {
     function makeParser(url, dom) {
         const parser = parserFactory.fetch(url, dom);
         parser.onUserPreferencesUpdate(prefs);
-        // Images are handled by our own pipeline later; keep <img src> as absolute URLs.
+        // Chapter images aren't fetched or packed; keep <img src> absolute (clean() strips <img> anyway).
         parser.imageCollector.replaceImageTags = el => {
             for (const img of el.querySelectorAll("img")) {
                 if (img.src) img.setAttribute("src", img.src);
