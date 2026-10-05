@@ -13,7 +13,11 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: import.meta.dirname, // standalone server.js at the image root
   experimental: { serverActions: { bodySizeLimit: "64kb" } }, // security.md #11
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The browser must always re-check the service worker, or reader updates never arrive.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
+    ];
   },
 };
 
