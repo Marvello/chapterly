@@ -10,6 +10,9 @@ const FIXTURES = [
     `<script>alert(1)</script><img src=x onerror=alert(1)><iframe src="https://e.com"></iframe><p>ok</p>`,
   "<h1>Chapter 236 | Kreg!</h1><h2>Chapter 236: 236 | Kreg!</h2><p>a</p>",
   "<h1>Chapter 2: Rain</h1><h2>Part One</h2><p>b</p>",
+  `<style>p{}</style><form action="https://e.com"><input name=p><button>Go</button></form>` +
+    `<img src="https://t.example/x.gif"><svg><text>s</text></svg><math><mi>m</mi></math>` +
+    `<p style="text-decoration: line-through; background:url(https://t.example/y)">x</p><span style="position:fixed">y</span>`,
 ];
 
 describe("clean", () => {
@@ -21,6 +24,11 @@ describe("clean", () => {
   it("drops the repeated chapter heading, keeps a real subtitle", () => {
     expect(clean(FIXTURES[1])).toBe("<h1>Chapter 236 | Kreg!</h1><p>a</p>");
     expect(clean(FIXTURES[2])).toBe(FIXTURES[2]);
+  });
+  it("drops page CSS, forms, images, svg/math and unsafe inline styles", () => {
+    const out = clean(FIXTURES[3]);
+    expect(out).not.toMatch(/<style|<form|<input|<button|<img|<svg|<math|url\(|position/i);
+    expect(out).toContain(`<p style="text-decoration: line-through">x</p><span>y</span>`);
   });
   it("matches the worker's copy, rules and version", () => {
     for (const f of FIXTURES) expect(clean(f)).toBe(worker.clean(f));

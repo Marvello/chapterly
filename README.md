@@ -56,6 +56,12 @@ Set all three `AUTH_OIDC_*` (issuer, client id, secret) to add a "Sign in with <
 3. First sign-in links the OIDC identity to the account with the same email; afterwards only that
    identity is accepted. `cli.js user:unlink-oidc <email>` resets the link.
 
+Password sign-in is rate-limited (10 attempts/min) per client IP, plus a per-account lockout. The app
+only learns the client IP from Cloudflare's `cf-connecting-ip` header, and only trusts it with
+`TRUST_CF_HEADER=1` — set that only behind a Cloudflare tunnel/proxy that is the sole way in. Without it
+(e.g. plain compose, no proxy) all clients share one rate-limit bucket; the account lockout still applies.
+`X-Forwarded-For` is never trusted. Sessions expire after 7 days without use.
+
 ## Deploy on a server
 Keep a git checkout of this repo on the server, next to its `.env` (never committed). To update, push
 from your machine, then pull and rebuild on the server:
@@ -95,7 +101,9 @@ arrives); to apply it now: `for i in $(seq 1 <last id>); do docker exec chapterl
   it stops and `list` shows the error. `node cli.js retry <id>` resets it. A novel is checked as soon as
   one of its chapters' retry is due, so the backoff applies even with daily checks. (Within a single check,
   WebToEpub's HttpClient already retries 429/5xx after 15/30/60/120 s.) Each HTTP request times out after
-  `CHAPTERLY_FETCH_TIMEOUT_SEC` (default 120); a timeout counts as a failed attempt. A check that fails
+  `CHAPTERLY_FETCH_TIMEOUT_SEC` (default 120); a timeout counts as a failed attempt. The worker refuses
+  to fetch private/loopback/link-local/CGNAT addresses (also after redirects) and responses over 20 MB;
+  `CHAPTERLY_ALLOW_PRIVATE=1` allows private addresses (e.g. a site on your own network). A check that fails
   as a whole (e.g. the novel's page times out) is retried on the same backoff instead of a full interval
   later, so a site that's down at the same hour every day doesn't block the novel forever.
 - **Restarts:** on startup the worker resumes any check it was stopped in the middle of (restart,

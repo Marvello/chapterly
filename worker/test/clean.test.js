@@ -12,4 +12,10 @@ assert.ok(out.includes("<h1>T</h1>") && out.includes("<p>ok</p>"), out);
 assert.strictEqual(clean("<h1>Chapter 236 | Kreg!</h1><h2>Chapter 236: 236 | Kreg!</h2><p>a</p>"), "<h1>Chapter 236 | Kreg!</h1><p>a</p>");
 for (const keep of ["<h1>Chapter 2: Rain</h1><h2>Part One</h2><p>b</p>", "<h1>Chapter 2</h1><h2>Chapter 3</h2>",
     "<p>x</p><h1>Chapter 1</h1><h2>Chapter 1</h2>"]) assert.strictEqual(clean(keep), keep);
+// Scraped CSS, forms (fake logins), remote images (tracking) and svg/math go; only safe inline styles stay.
+const page = clean(`<style>p{}</style><form action="https://e.com"><input name=p><button>Go</button></form>` +
+    `<img src="https://t.example/x.gif"><svg><text>s</text></svg><math><mi>m</mi></math>` +
+    `<p style="text-decoration: line-through; background:url(https://t.example/y)">x</p><span style="position:fixed">y</span>`);
+assert.ok(!/<style|<form|<input|<button|<img|<svg|<math|url\(|position/i.test(page), page);
+assert.ok(page.includes(`<p style="text-decoration: line-through">x</p><span>y</span>`), page);
 console.log("✓ clean test passed");

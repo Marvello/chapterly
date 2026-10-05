@@ -5,7 +5,9 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "same-origin" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+  // form-action: no form may post off-site (scraped chapter HTML is sanitized too). OIDC sign-in is fetch +
+  // window.location, and server-action forms (sign-out included) post to self, so 'self' covers them.
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; form-action 'self'" },
 ];
 
 const nextConfig: NextConfig = {

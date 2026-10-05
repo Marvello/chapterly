@@ -10,3 +10,10 @@ export function createRateLimiter(limit: number, windowMs: number) {
     return allowed;
   };
 }
+
+/** Rate-limit key. cf-connecting-ip is set by Cloudflare (tunnel) and can't be spoofed through it, but anyone
+ *  reaching the app directly can send it, so it is trusted only with TRUST_CF_HEADER=1. Otherwise every client
+ *  shares one bucket (per-account lockout still applies). x-forwarded-for is never trusted: any client sets it. */
+export function clientIp(h: Headers, trustCf = process.env.TRUST_CF_HEADER === "1"): string {
+  return (trustCf && h.get("cf-connecting-ip")) || "unknown";
+}
