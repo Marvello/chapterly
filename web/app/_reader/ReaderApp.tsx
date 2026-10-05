@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { runSync } from "@/lib/reader/client";
+import { IdbBlockedError } from "@/lib/reader/idb";
 import { online, unreachable } from "@/lib/reader/online";
 import { AuthError } from "@/lib/reader/sync";
 import { parseId } from "@/lib/validate";
@@ -36,7 +37,8 @@ export default function ReaderApp() {
         // Can't reach the server: show the offline library. (Another server error still means it's there.)
         const reachable = !unreachable(e);
         online.setReachable(reachable);
-        setNotice(reachable ? "Sync failed; it will retry when you come back." : null);   // offline: the page says so
+        setNotice(!reachable ? null   // offline: the page says so
+          : e instanceof IdbBlockedError ? e.message : "Sync failed; it will retry when you come back.");
       });
   }, []);
 
