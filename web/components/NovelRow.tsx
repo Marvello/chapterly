@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element -- covers are remote images from the novel's site */
 import type { LibraryRow } from "@/lib/db";
 import { displayTitle, fetchedPct, novelStatus, relativeTime } from "@/lib/view";
+import Cover from "./Cover";
 import ReaderLink from "./ReaderLink";
 import StatusBadge from "./StatusBadge";
 
@@ -11,9 +11,7 @@ export default function NovelRow({ novel: n, online = true }: { novel: LibraryRo
   return (
     <li>
       <ReaderLink href={`/?novel=${n.id}`} className="flex gap-3 rounded-xl border border-edge bg-component p-3 hover:border-accent">
-        {n.cover_url
-          ? <img src={n.cover_url} alt="" className="h-20 w-14 shrink-0 rounded object-cover" loading="lazy" referrerPolicy="no-referrer" />
-          : <div className="h-20 w-14 shrink-0 rounded bg-edge" />}
+        <Cover url={n.cover_url} title={displayTitle(n)} className="h-20 w-14 shrink-0 rounded text-[10px]" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h2 className="truncate font-medium text-tprimary">{displayTitle(n)}</h2>

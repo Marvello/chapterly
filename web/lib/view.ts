@@ -26,7 +26,18 @@ export const libraryView = (v?: string): LibraryView =>
 export const fetchedPct = (n: Pick<LibraryRow, "chapters_fetched" | "chapters_total">) =>
   n.chapters_total ? Math.round((n.chapters_fetched / n.chapters_total) * 100) : 0;
 
-export const displayTitle =(n: Pick<NovelRow, "title" | "toc_url">) => n.title || n.toc_url;
+/** Title, else the site's hostname (not the whole TOC URL) until the first check names the novel. */
+export function displayTitle(n: Pick<NovelRow, "title" | "toc_url">): string {
+  if (n.title) return n.title;
+  try { return new URL(n.toc_url).hostname || n.toc_url; } catch { return n.toc_url; }
+}
+
+/** Stable hue (0–359) for a title's placeholder cover. */
+export function coverHue(title: string): number {
+  let h = 0;
+  for (const ch of title) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
+  return h % 360;
+}
 
 /** Default library order: novels with new chapters first, then by title. */
 export const sortLibrary = (rows: LibraryRow[]) => queryLibrary(rows, { sort: "new", filter: "all", q: "" });

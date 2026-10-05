@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element -- covers are remote images from the novel's site */
 import type { LibraryRow } from "@/lib/db";
 import { displayTitle, fetchedPct, novelStatus } from "@/lib/view";
+import Cover from "./Cover";
 import ReaderLink from "./ReaderLink";
 
 /** Cover grid. The bar under each cover is the share of chapters fetched (red on error). */
@@ -13,8 +13,8 @@ export default function NovelPosters({ novels, online = true }: { novels: Librar
           <li key={n.id}>
             <ReaderLink href={`/?novel=${n.id}`} title={displayTitle(n)}
               className="block overflow-hidden rounded-lg border border-edge bg-component hover:border-accent">
-              <div className="relative aspect-[2/3] bg-edge">
-                {n.cover_url && <img src={n.cover_url} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" />}
+              <div className="relative aspect-[2/3]">
+                <Cover url={n.cover_url} title={displayTitle(n)} className="h-full w-full text-sm" />
                 {n.chapters_new > 0 && (
                   <span className="absolute right-1 top-1 rounded bg-accent px-1 text-xs font-medium text-page">+{n.chapters_new}</span>
                 )}

@@ -1,9 +1,9 @@
-/* eslint-disable @next/next/no-img-element -- remote cover from the novel's site */
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, BookOpenText, Check, Clock, ExternalLink, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { checkNowAction, retryAction, setStatusAction } from "@/app/actions";
 import AutoRefresh from "@/components/AutoRefresh";
+import Cover from "@/components/Cover";
 import DeleteButton from "@/components/DeleteButton";
 import EpubToggle from "@/components/EpubToggle";
 import Header from "@/components/Header";
@@ -56,9 +56,7 @@ export default async function NovelPage({ params, searchParams }:
       )}
 
       <section className="mb-4 flex gap-4">
-        {n.cover_url
-          ? <img src={n.cover_url} alt="" className="h-36 w-24 shrink-0 rounded object-cover" referrerPolicy="no-referrer" />
-          : <div className="h-36 w-24 shrink-0 rounded bg-edge" />}
+        <Cover url={n.cover_url} title={displayTitle(n)} className="h-36 w-24 shrink-0 rounded text-sm" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold text-tprimary">{displayTitle(n)}</h1>
