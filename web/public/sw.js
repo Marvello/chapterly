@@ -1,7 +1,7 @@
 // Chapterly service worker: keeps the app shell (/, the library + reader page) so it opens offline.
 // Chapters are not cached here — the reader stores them in IndexedDB itself.
 // ponytail: hashed /_next/static files from old deploys pile up in this cache; bump CACHE to clear them.
-const CACHE = "chapterly-shell-v2";
+const CACHE = "chapterly-shell-v3";
 
 async function cacheShell() {
   const cache = await caches.open(CACHE);
@@ -30,13 +30,15 @@ self.addEventListener("fetch", e => {
       return res;
     })));
   } else if (e.request.mode === "navigate" && url.pathname === "/") {
-    // The shell: network first (fresh deploys), cached copy when offline — or when the network is too
+    // The shell: network first (fresh deploys), cached copy when offline, when the server errors (a
+    // Cloudflare 502/530 while the home server is down but the tunnel up), or when the network is too
     // slow to answer within 4 s (connected but passing nothing). A late answer still refreshes the cache.
+    // Navigations fetch with redirect: "manual", so the sign-in redirect arrives as an opaqueredirect.
+    const cached = () => caches.match("/");
     const network = fetch(e.request).then(res => {
       if (res.ok && !res.redirected) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("/", copy)); }
-      return res;
+      return res.ok || res.type === "opaqueredirect" ? res : cached().then(hit => hit || res);
     });
-    const cached = () => caches.match("/");
     const slow = new Promise(resolve => setTimeout(resolve, 4000)).then(cached);
     e.respondWith(Promise.race([network, slow])
       .then(res => res || network)
