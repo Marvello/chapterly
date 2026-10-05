@@ -1,16 +1,19 @@
 @import "tailwindcss";
 
-/* Dark by default, light when the OS asks for it. Components use only these tokens. */
+/* Warm paper (light) / charcoal (dark), amber accent. Dark by default, light when the OS asks for it.
+   Components use only these tokens. Every text colour (incl. page-on-accent/critical buttons) is ≥ 4.5:1
+   on page and component; keep it so (reader THEMES in lib/reader/settings.ts and the viewport/manifest
+   colours mirror --page). */
 :root {
-  --page: #0b1120; --component: #16202f; --edge: #1e293b;
-  --tprimary: #e2e8f0; --tsecondary: #cbd5e1; --tmuted: #94a3b8;
-  --accent: #2dd4bf; --good: #34d399; --warn: #f59e0b; --critical: #ef4444;
+  --page: #1c1916; --component: #26221e; --edge: #3a332c;
+  --tprimary: #f3ece2; --tsecondary: #d9cfc2; --tmuted: #a69a8b;
+  --accent: #f0a04b; --good: #4ade80; --warn: #fbbf24; --critical: #f87171;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --page: #f8fafc; --component: #ffffff; --edge: #e2e8f0;
-    --tprimary: #0f172a; --tsecondary: #334155; --tmuted: #64748b;
-    --accent: #0d9488; --good: #059669; --warn: #b45309; --critical: #dc2626;
+    --page: #faf7f2; --component: #fffdf9; --edge: #e7dfd2;
+    --tprimary: #2a2420; --tsecondary: #4a4038; --tmuted: #6e6257;
+    --accent: #b45309; --good: #047857; --warn: #a16207; --critical: #b91c1c;
   }
 }
 @theme inline {
@@ -21,7 +24,7 @@
 /* `font-serif` utility + var(--font-serif): Literata (next/font, layout.tsx), system serif until it loads. */
 @theme { --font-serif: var(--font-literata), Georgia, "Times New Roman", serif; }
 body { background: var(--page); color: var(--tsecondary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-input, select, textarea { outline: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 
 /* Reader: chapter HTML from novel sites (sanitized server-side by clean(), which also drops images).
