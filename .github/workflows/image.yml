@@ -19,7 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm run setup   # clones WebToEpub into worker/vendor-WebToEpub, installs worker + web
+      # WebToEpub at the commit pinned in worker/Dockerfile (the one the image ships), then npm ci both
+      - run: worker/setup.sh && npm --prefix web ci
       - run: npm test
 
   image:

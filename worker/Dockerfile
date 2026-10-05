@@ -2,8 +2,11 @@
 FROM node:24-slim
 WORKDIR /app/worker
 
-# WebToEpub (GPLv3) straight from upstream; rebuild with --no-cache to pull parser fixes.
-ADD --keep-git-dir=false https://github.com/dteviot/WebToEpub.git#ExperimentalTabMode vendor-WebToEpub
+# WebToEpub (GPLv3), pinned to the commit CI tests against. The ONLY place the pin lives: setup.sh reads it
+# from here. To pull parser fixes: set it to `git ls-remote https://github.com/dteviot/WebToEpub.git
+# ExperimentalTabMode`, run worker/setup.sh, run the tests, commit.
+ARG WEBTOEPUB_REF=5b2965d6fffca0afedf8ba39c71796cab2710468
+ADD --keep-git-dir=false https://github.com/dteviot/WebToEpub.git#${WEBTOEPUB_REF} vendor-WebToEpub
 
 COPY worker/package.json worker/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
