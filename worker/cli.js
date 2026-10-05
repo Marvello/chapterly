@@ -6,6 +6,7 @@
 //   node cli.js build   <id>                     rebuild the EPUB from stored chapters
 //   node cli.js pause|resume|remove <id>         stop/start scheduled checks, or delete the novel (EPUB file is kept)
 //   node cli.js retry   <id>                     reset failed chapters' attempts so the next check retries them
+//   node cli.js epub    <id> on|off              build the EPUB / rescan Audiobookshelf for this novel (default on)
 //   node cli.js series  <id> ongoing|completed|dropped   mark the story's status (completed + fully fetched = no more checks)
 //   node cli.js user:create <email> [name]       create the login account (password prompted, hidden)
 //   node cli.js user:password <email>            change the password (logs out all sessions)
@@ -143,6 +144,13 @@ function userByEmail(db, email) {
         const db = openDb(), n = novelById(db, arg1);
         const { changes } = db.resetChapterRetries(n.id);
         console.log(`#${n.id}: ${changes} failed chapter(s) will be retried on the next check`);
+        break;
+    }
+    case "epub": {
+        const db = openDb(), n = novelById(db, arg1);
+        if (!["on", "off"].includes(arg2)) throw new Error("usage: epub <id> on|off");
+        db.setEpubEnabled(n.id, arg2 === "on");
+        console.log(`#${n.id}: EPUB ${arg2}${arg2 === "off" && n.epub_path ? ` (kept ${n.epub_path})` : ""}`);
         break;
     }
     case "remove": {

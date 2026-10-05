@@ -216,6 +216,20 @@ const chapterRequests = site => site.requests.filter(u => /\/chapter-\d+$/.test(
     await checkNovel(db, s, db.getNovel(id), quiet);
     assert.deepStrictEqual([db.getNovel(id).check_failures, db.getNovel(id).check_retry_at], [0, null]);
 
+    // Stored chapters are sanitized; EPUB building can be switched off per novel (and back on).
+    assert.ok(db.readerChapters(id, null, 200).every(c => c.html_clean === 1), "worker stores sanitized html");
+    db.setEpubEnabled(id, false);
+    site.chapterCount = 8;
+    const builtBefore = db.getNovel(id).epub_built_at;
+    const offRescans = [];
+    await checkNovel(db, s, db.getNovel(id), quiet, { onEpubWritten: t => offRescans.push(t) });
+    assert.strictEqual(db.chapters(id).filter(c => c.html).length, 8, "chapters still fetched with EPUB off");
+    assert.strictEqual(db.getNovel(id).epub_built_at, builtBefore, "no EPUB rebuild while off");
+    assert.deepStrictEqual(offRescans, [], "no Audiobookshelf rescan while off");
+    db.setEpubEnabled(id, true);
+    await checkNovel(db, s, db.getNovel(id), quiet);
+    assert.notStrictEqual(db.getNovel(id).epub_built_at, builtBefore, "rebuilt once switched back on");
+
     // A novel deleted from the UI before/while the worker checks it: no throw, nothing rebuilt.
     const doomed = db.addNovel(`${BASE}?deleted`);
     db.deleteNovel(doomed.id);

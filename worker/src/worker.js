@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { diffChapters } = require("./diff");
 const { createAbsNotifier, absConfigFromEnv } = require("./audiobookshelf");
+const { sanitize } = require("./sanitize");
 
 const LIBRARY = () => process.env.CHAPTERLY_LIBRARY || path.join(__dirname, "..", "..", "library");
 // Chapter retries across checks: after the nth failure wait RETRY_BASE_MIN * 2^(n-1)
@@ -55,7 +56,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
             }
             try {
                 const ch = await scraper.getChapter(novel, c.url);
-                db.saveChapter(c.id, ch.html);
+                db.saveChapter(c.id, sanitize(ch.html));
                 log(`[${id}]   ${i + 1}/${pending.length} ${c.title || c.url}`);
             } catch (e) {
                 failed++;
@@ -76,7 +77,7 @@ async function checkNovel(db, scraper, novelRow, log = console.log, opts = {}) {
         log(`[${id}] ✗ ${error} (retry after ${checkRetryAt})`);
     }
     // Rebuild even after a partial failure, so chapters that did arrive reach the reader.
-    if (db.epubStale(id)) {
+    if (db.getNovel(id)?.epub_enabled && db.epubStale(id)) {
         try {
             const file = await buildEpub(db, scraper, id);
             await onEpubWritten?.(db.getNovel(id)?.title || novelRow.toc_url);
