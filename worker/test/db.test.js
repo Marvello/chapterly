@@ -71,7 +71,18 @@ const fresh = name => path.join(tmp, name);
     const [row] = w.listNovels(new Date(Date.now() - 86_400_000).toISOString());
     assert.deepStrictEqual(
         [row.chapters_total, row.chapters_fetched, row.chapters_failing, row.chapters_new], [3, 1, 1, 1]);
-    w.addNovel("https://example.com/novel/b");
+    const nb = w.addNovel("https://example.com/novel/b");
+    assert.deepStrictEqual(w.listNovels(undefined, nb.id).map(r => r.id), [nb.id], "filtered to one novel");
+    assert.strictEqual(w.listNovels().length, 2);
+    // The per-tick aggregate is answered from the covering index, never the chapter rows (html).
+    const raw3 = new DatabaseSync(fresh("web.db"));
+    const plan = raw3.prepare(`EXPLAIN QUERY PLAN SELECT COUNT(c.id), COUNT(c.fetched_at), SUM(c.attempts),
+        MIN(c.retry_at) FROM novels n LEFT JOIN chapters c ON c.novel_id = n.id GROUP BY n.id`).all();
+    assert.ok(plan.some(r => /COVERING INDEX chapters_stats_idx/.test(r.detail)), JSON.stringify(plan));
+    raw3.close();
+    assert.strictEqual(w.workerSeenAt(), null, "no heartbeat yet");
+    w.heartbeat();
+    assert.ok(Date.now() - Date.parse(w.workerSeenAt()) < 5000);
     const [empty] = w.listNovels().filter(r => r.chapters_total === 0);
     assert.deepStrictEqual([empty.chapters_failing, empty.chapters_new], [0, 0], "counts are 0, not null");
 
@@ -93,7 +104,8 @@ const fresh = name => path.join(tmp, name);
     assert.strictEqual(w.bindOidcSub(u.id, "sub-2"), 0, "never re-binds an already bound user");
     assert.strictEqual(w.getUserByOidcSub("sub-1").id, u.id);
     w.unlinkOidc(u.id);
-    assert.strictEqual(w.getUserById(u.id).oidc_sub, null);
+    assert.deepStrictEqual([w.getUserById(u.id).oidc_sub, w.getUserById(u.id).session_version], [null, 3],
+        "unlinking logs out existing sessions");
     assert.throws(() => w.createUser({ email: "me@example.com", name: null, passwordHash: "x" }), /UNIQUE/);
     w.close();
 
@@ -110,7 +122,7 @@ const fresh = name => path.join(tmp, name);
     assert.throws(() => ss.setSeriesStatus(sn.id, "paused"), /CHECK/);
     ss.close();
 
-    // ---- interrupted checks (started, never finished) get a "check now" on worker start ----
+    // ---- interrupted checks (started, never finished) are found on worker start ----
     const ir = openDb(fresh("interrupted.db"));
     const cut = ir.addNovel("https://example.com/novel/cut").id;        // started, never finished
     const fine = ir.addNovel("https://example.com/novel/fine").id;      // finished normally
@@ -119,9 +131,7 @@ const fresh = name => path.join(tmp, name);
     for (const x of [cut, fine, paused]) ir.markCheckStarted(x);
     ir.markCheckDone(fine, null);
     ir.setStatus(paused, "paused");
-    assert.strictEqual(ir.requestInterruptedChecks(), 1);
-    assert.ok(ir.getNovel(cut).check_requested_at);
-    for (const x of [fine, paused, fresh1]) assert.strictEqual(ir.getNovel(x).check_requested_at, null);
+    assert.deepStrictEqual(ir.interruptedChecks().map(r => r.id), [cut], `not finished/paused/never checked (#${fresh1})`);
     ir.close();
 
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----
@@ -153,7 +163,7 @@ const fresh = name => path.join(tmp, name);
         assert.deepStrictEqual(rdb.readerChapters(nid, null, 2).map(c => c.id), [toc[0].id, toc[1].id]);
         assert.deepStrictEqual(rdb.readerChapters(nid, toc[3].id, 10), []);
 
-        const lib = () => rdb.readerLibrary(u.id).find(n => n.id === nid);
+        const lib = () => rdb.readerLibrary(u.id, nid)[0];
         assert.strictEqual(lib().unread, 4, "not started: every fetched chapter is unread");
         assert.strictEqual(lib().progress_chapter_id, null);
 

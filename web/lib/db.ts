@@ -42,7 +42,7 @@ export interface Db {
   addNovel(url: string): NovelRow;
   findNovelByUrl(url: string): NovelRow | undefined;
   getNovel(id: number): NovelRow | undefined;
-  listNovels(newSince?: string): LibraryRow[];
+  listNovels(newSince?: string, novelId?: number): LibraryRow[];
   requestCheck(id: number): void;
   setCheckInterval(id: number, minutes: number): void;
   setSeriesStatus(id: number, status: "ongoing" | "completed" | "dropped"): void;
@@ -59,13 +59,14 @@ export interface Db {
   recordLoginSuccess(id: number): void;
   bindOidcSub(id: number, sub: string): number;
   isSupportedHost(host: string): boolean | null;
-  readerLibrary(userId: number): ReaderNovel[];
+  readerLibrary(userId: number, novelId?: number): ReaderNovel[];
   readerToc(novelId: number): TocEntry[];
   readerChapters(novelId: number, afterChapterId: number | null, limit: number): ReaderChapterRow[];
   saveCleanHtml(chapterId: number, html: string, cleanVersion: number): void;
   getProgress(userId: number, novelId: number): ReaderPosition | null;
   saveProgress(userId: number, p: ProgressInput): { saved: boolean; position: ReaderPosition | null };
   setEpubEnabled(id: number, on: boolean): void;
+  workerSeenAt(): string | null;   // worker_status.seen_at: last worker heartbeat
 }
 
 const cache = globalThis as unknown as { __novelDb?: Db };

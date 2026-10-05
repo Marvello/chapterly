@@ -13,7 +13,7 @@ import StatusBadge from "@/components/StatusBadge";
 import { currentUserId } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { parseId } from "@/lib/validate";
-import { displayTitle, isChecking, isSeriesDone, nextCheckAt, novelStatus, relativeTime } from "@/lib/view";
+import { displayTitle, isChecking, isSeriesDone, nextCheckAt, nextCheckLabel, novelStatus, relativeTime, workerDown } from "@/lib/view";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
@@ -33,9 +33,11 @@ export default async function NovelPage({ params, searchParams }:
   const failing = db.failingChapters(n.id);
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
-  const counts = db.listNovels().find(r => r.id === n.id);
+  const [counts] = db.listNovels(undefined, n.id);
   const uid = await currentUserId();
-  const reading = uid ? db.readerLibrary(uid).find(r => r.id === n.id) : undefined;
+  const reading = uid ? db.readerLibrary(uid, n.id)[0] : undefined;
+  const seenAt = db.workerSeenAt();
+  const workerStopped = workerDown(seenAt, Number(process.env.CHAPTERLY_TICK_MIN || 1));
   const unread = reading?.progress_chapter_id != null ? reading.unread : null;
   const nextCheck = nextCheckAt(counts ?? n);
   const done = counts ? isSeriesDone(counts) : false;
@@ -45,6 +47,13 @@ export default async function NovelPage({ params, searchParams }:
     <main className="mx-auto max-w-3xl p-4">
       <AutoRefresh active={status === "fetching_info" || status === "checking"} />
       <Header />
+
+      {workerStopped && (
+        <p className="mb-4 flex items-center gap-2 rounded-xl border border-critical/50 bg-component p-3 text-sm text-critical">
+          <AlertTriangle className="size-4 shrink-0" />
+          Worker not running (last seen {relativeTime(seenAt)}): no checks or downloads until it&apos;s back.
+        </p>
+      )}
 
       <section className="mb-4 flex gap-4">
         {n.cover_url
@@ -64,7 +73,7 @@ export default async function NovelPage({ params, searchParams }:
           <p className="text-sm text-tmuted">Checked {relativeTime(n.last_checked_at)}
             {n.status === "active" && !isChecking(n) && (done
               ? <> · no more checks — completed</>
-              : nextCheck && <> · next {relativeTime(nextCheck)}{n.series_status === "dropped" && " (dropped: weekly at most)"}</>)}</p>
+              : nextCheck && <> · {nextCheckLabel(nextCheck)}{n.series_status === "dropped" && " (dropped: weekly at most)"}</>)}</p>
           {n.epub_path && <p className="break-all font-mono text-xs text-tmuted">{n.epub_path}</p>}
         </div>
       </section>

@@ -99,6 +99,17 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
   return diff >= 0 ? `${v}${unit} ago` : `in ${v}${unit}`;
 }
 
+/** "next in 3h", or "due now" once that time has passed (instead of "next 6d ago"). */
+export const nextCheckLabel = (iso: string, now = Date.now()) =>
+  Date.parse(iso) <= now ? "due now" : `next ${relativeTime(iso, now)}`;
+
+/**
+ * The worker stamps a heartbeat every tick (and per chapter while a long check runs): none for 3 ticks → not
+ * running. At least 10 min, as one chapter fetch can take minutes (timeout + throttle).
+ */
+export const workerDown = (seenAt: string | null, tickMin: number, now = Date.now()) =>
+  !seenAt || now - Date.parse(seenAt) > Math.max(3 * tickMin, 10) * 60_000;
+
 /** Chapters fetched at/after this time count as "+N new" in the library (last 24 h). */
 export const newSince = (now = Date.now()) => new Date(now - 86_400_000).toISOString();
 
@@ -110,7 +121,7 @@ const WEEK_MIN = 7 * 24 * 60;
 
 /**
  * When the worker will next check (same rule as worker/src/worker.js isDue): dropped → at least weekly,
- * or earlier when a failed check or chapter is due for a retry.
+ * or earlier when a failed check or chapter is due for a retry (a failed check's backoff holds chapter retries back).
  */
 export function nextCheckAt(
   n: Pick<NovelRow, "last_checked_at" | "check_interval_min" | "series_status"> &
@@ -119,5 +130,6 @@ export function nextCheckAt(
   if (!n.last_checked_at) return null;
   const intervalMin = n.series_status === "dropped" ? Math.max(n.check_interval_min, WEEK_MIN) : n.check_interval_min;
   const scheduled = new Date(Date.parse(n.last_checked_at) + intervalMin * 60_000).toISOString();
-  return [n.check_retry_at, n.next_retry_at].reduce<string>((min, t) => (t && t < min ? t : min), scheduled);
+  const retryAt = n.check_retry_at || n.next_retry_at;
+  return retryAt && retryAt < scheduled ? retryAt : scheduled;
 }
