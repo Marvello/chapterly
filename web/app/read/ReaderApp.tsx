@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { runSync } from "@/lib/reader/client";
 import { AuthError } from "@/lib/reader/sync";
 import { parseId } from "@/lib/validate";
@@ -12,6 +12,7 @@ import ReadingView from "./ReadingView";
 // Views switch by query string (?novel=, &chapter=) via pushState, so the whole reader is one cached page.
 export default function ReaderApp() {
   const params = useSearchParams();
+  const router = useRouter();
   const novelId = parseId(params.get("novel") ?? "");
   const chapterId = parseId(params.get("chapter") ?? "");
   const [rev, setRev] = useState(0);
@@ -24,7 +25,7 @@ export default function ReaderApp() {
       runSync()
         .then(r => { setNotice(r.quotaExceeded ? "Phone storage is full, so downloading stopped." : null); setRev(v => v + 1); })
         .catch(e => {
-          if (e instanceof AuthError) window.location.href = "/login";
+          if (e instanceof AuthError) router.replace("/login");
           else setNotice("Sync failed; it will retry when you come back.");
         });
     };
@@ -36,7 +37,7 @@ export default function ReaderApp() {
       window.removeEventListener("online", sync);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [router]);
 
   if (novelId && chapterId) return <ReadingView key={novelId} novelId={novelId} chapterId={chapterId} />;
   if (novelId) return <NovelView novelId={novelId} rev={rev} />;
