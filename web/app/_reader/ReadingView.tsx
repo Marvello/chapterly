@@ -50,6 +50,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
   const opened = useRef(false);                                        // the initial open runs once (deps change with the URL)
   const loading = useRef(false);
   const root = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const updateSettings = (p: Partial<ReaderSettings>) => settingsStore.set({ ...settings, ...p });
@@ -107,7 +108,9 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     if (r) {
       const el = root.current?.querySelector<HTMLElement>(`[data-chapter="${r.chapterId}"]`);
       if (el) {
-        window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + r.fraction * el.offsetHeight);
+        // below the fixed top bar, not under it
+        window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + r.fraction * el.offsetHeight
+          - (header.current?.offsetHeight ?? 0));
         restoreTo.current = null;
       }
     }
@@ -230,7 +233,7 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
 
   return (
     <div style={{ ...theme, fontSize: settings.fontSize, lineHeight: settings.lineHeight }} className="min-h-screen">
-      <header className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
+      <header ref={header} className={`fixed inset-x-0 top-0 z-10 flex items-center gap-2 px-3 py-2 text-sm transition-transform ${barHidden ? "-translate-y-full" : ""}`}
         style={{ background: theme.background, borderBottom: "1px solid rgba(127,127,127,.25)" }}>
         <button onClick={() => go(`/?novel=${novelId}`)} aria-label="Back to chapters"><ArrowLeft className="size-5" /></button>
         <div className="min-w-0 flex-1 leading-tight">
