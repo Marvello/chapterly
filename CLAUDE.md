@@ -62,8 +62,8 @@ SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapte
 - Look: warm paper/charcoal tokens + amber accent in `globals.css` (all text pairs ≥4.5:1 — re-check if you change
   them), Literata as `font-serif` (`layout.tsx` → `--font-literata`). Reader settings add font, width and a
   "system" theme that is pure CSS (uses the page tokens). Library: `ContinueShelf`, `Cover` (hashed-hue placeholder),
-  posters default on phones (`viewPref.ts`), add form behind "+". Novel view header links to the online-only
-  manage page `/novels/[id]`; both list chapters in reading order (`idx, id`).
+  posters default on phones (`viewPref.ts`), add form behind "+". Novel view opens scrolled to the current chapter, so its
+  "Library" back bar is sticky; its header links to the online-only manage page `/novels/[id]`; both list chapters in reading order (`idx, id`).
 - Per-novel `novels.epub_enabled` gates the EPUB build and the Audiobookshelf rescan.
 - Browser-automation testing: the automation tab is hidden, so IntersectionObserver/timers only run while it
   renders — drive it with real scroll input + screenshots.

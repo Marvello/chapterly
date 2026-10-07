@@ -71,7 +71,8 @@ export default function LibraryView({ rev, notice, resync }: { rev: number; noti
         : <>
           {!query.q && query.filter === "all" && <ContinueShelf novels={all} />}
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1"><LibraryControls query={query} /></div>
+            {/* basis: on a phone the layout toggle wraps below instead of squeezing the controls */}
+            <div className="min-w-0 grow basis-72"><LibraryControls query={query} /></div>
             <ViewToggle />
           </div>
           <p className="mb-3 text-sm text-tmuted">

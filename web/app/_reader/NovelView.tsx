@@ -56,9 +56,12 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
 
   return (
     <main className="mx-auto max-w-2xl p-4">
-      <button onClick={() => go("/")} className="mb-3 flex items-center gap-1 text-sm text-tmuted hover:text-tprimary">
-        <ArrowLeft className="size-4" /> Library
-      </button>
+      {/* Sticky: the page opens scrolled to the current chapter, far below the top. */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 border-b border-edge bg-page px-4 py-3">
+        <button onClick={() => go("/")} className="flex items-center gap-1 text-sm text-tmuted hover:text-tprimary">
+          <ArrowLeft className="size-4" /> Library
+        </button>
+      </div>
       <header className="mb-4 flex gap-4">
         <Cover url={novel?.cover_url ?? null} title={title} className="h-36 w-24 shrink-0 rounded text-sm" />
         <div className="min-w-0 space-y-1">
