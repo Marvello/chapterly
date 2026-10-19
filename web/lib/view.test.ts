@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryRow } from "./db";
-import { continueReading, coverHue, displayTitle, fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
+import { chapterOrder, continueReading, coverHue, displayTitle, fetchedPct, isSeriesDone, libraryView, newSince, nextCheckAt, nextCheckLabel, novelStatus, pageOf, parseLibraryQuery, queryLibrary, relativeTime, sortLibrary, workerDown } from "./view";
 
 const row = (o: Partial<LibraryRow>): LibraryRow => ({
   id: 1, toc_url: "https://x.com/n", parser: null, title: "T", author: null, language: null, subjects: null,
@@ -151,5 +151,22 @@ describe("parseLibraryQuery / queryLibrary", () => {
     expect(ids("title", "all", "ALP")).toEqual([2]);
     expect(ids("title", "all", "ann")).toEqual([1]);
     expect(ids("title", "ongoing", "zzz")).toEqual([]);
+  });
+});
+
+describe("chapterOrder / pageOf", () => {
+  it("defaults to newest first", () => {
+    expect(chapterOrder(undefined)).toBe("desc");
+    expect(chapterOrder("bogus")).toBe("desc");
+    expect(chapterOrder("asc")).toBe("asc");
+  });
+  it("finds the page holding a chapter in either order", () => {
+    // 250 chapters, 100 per page: idx 0 is on page 1 oldest-first, page 3 newest-first.
+    expect(pageOf(0, 250, 100, "asc")).toBe(1);
+    expect(pageOf(0, 250, 100, "desc")).toBe(3);
+    expect(pageOf(249, 250, 100, "desc")).toBe(1);
+    expect(pageOf(150, 250, 100, "desc")).toBe(1);
+    expect(pageOf(149, 250, 100, "desc")).toBe(2);
+    expect(pageOf(300, 250, 100, "desc")).toBe(1); // idx past the end (TOC gaps): clamped
   });
 });

@@ -101,12 +101,14 @@ export default function ReadingView({ novelId, chapterId }: { novelId: number; c
     if (opened.current) return;
     opened.current = true;
     (async () => {
+      const novel = (await store.getLibrary())?.find(n => n.id === novelId);
       let list = await store.getToc(novelId);
-      if (!list && navigator.onLine) {
+      // Missing or stale (shorter than the fetched count, e.g. a sync that failed midway): the chapter to open
+      // may not be in it, which would leave the page blank.
+      if ((!list || (novel && list.length !== novel.chapters_fetched)) && navigator.onLine) {
         try { list = await httpApi.toc(novelId); await store.setToc(novelId, list); } catch (e) { onLoadError(e); }
       }
       list ??= [];
-      const novel = (await store.getLibrary())?.find(n => n.id === novelId);
       saved.current = savedProgress(novel ? savedFromLibrary(novel) : null, (await store.getOutbox(novelId)) ?? null);
       setToc(list);
       setNovelTitle(novel?.title ?? "");

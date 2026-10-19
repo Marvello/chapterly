@@ -135,13 +135,34 @@ const fresh = name => path.join(tmp, name);
     assert.deepStrictEqual(ir.interruptedChecks().map(r => r.id), [cut], `not finished/paused/never checked (#${fresh1})`);
     ir.close();
 
-    // ---- "check all" queues every active novel, skips paused ----
+    // ---- chapter page, newest first ----
+    const cp = openDb(fresh("chapterpage.db"));
+    const cpn = cp.addNovel("https://example.com/novel/cp").id;
+    cp.addChapters(cpn, [0, 1, 2].map(i => ({ index: i, url: `https://example.com/c/${i}`, title: `C${i}` })));
+    assert.deepStrictEqual(cp.chapterPage(cpn, 2, 0, true).map(c => c.idx), [2, 1]);
+    assert.deepStrictEqual(cp.chapterPage(cpn, 2, 0).map(c => c.idx), [0, 1]);
+    cp.close();
+
+    // ---- "check all" queues every active novel, skips paused and completed + fully fetched ----
     const ca = openDb(fresh("checkall.db"));
     const on = ca.addNovel("https://example.com/novel/on").id;
     const off = ca.addNovel("https://example.com/novel/off").id;
     ca.setStatus(off, "paused");
+    const withChapters = (url, fetchAll) => {
+        const id = ca.addNovel(url).id;
+        ca.addChapters(id, [0, 1].map(i => ({ index: i, url: `${url}/c/${i}`, title: "" })));
+        const rows = ca.chapters(id);
+        for (const c of fetchAll ? rows : rows.slice(0, 1)) ca.saveChapter(c.id, "<p>x</p>", 1);
+        ca.setSeriesStatus(id, "completed");
+        return id;
+    };
+    const doneAll = withChapters("https://example.com/novel/done", true);   // completed, all fetched → skip
+    const doneGap = withChapters("https://example.com/novel/gap", false);   // completed, one missing → check
+    const doneEmpty = ca.addNovel("https://example.com/novel/empty").id;     // completed, no TOC yet → check
+    ca.setSeriesStatus(doneEmpty, "completed");
     ca.requestCheckAll();
-    assert.deepStrictEqual(ca.listNovels().filter(r => r.check_requested_at).map(r => r.id), [on], `paused #${off} skipped`);
+    assert.deepStrictEqual(ca.listNovels().filter(r => r.check_requested_at).map(r => r.id), [on, doneGap, doneEmpty],
+        `paused #${off} and completed+fetched #${doneAll} skipped`);
     ca.close();
 
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----

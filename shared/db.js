@@ -53,8 +53,12 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         interruptedChecks: () => all(`SELECT * FROM novels WHERE status = 'active' AND last_checked_at IS NOT NULL
               AND last_checked_at > COALESCE(check_finished_at, '') ORDER BY id`),
         requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
-        /** "Check now" for every active novel (paused ones would never consume it). */
-        requestCheckAll: () => run("UPDATE novels SET check_requested_at = ? WHERE status = 'active'", now()),
+        /** "Check now" for every active novel (paused ones would never consume it), except completed ones with
+         * every chapter fetched — the same novels worker.js isDue never schedules. */
+        requestCheckAll: () => run(`UPDATE novels SET check_requested_at = ? WHERE status = 'active'
+              AND NOT (series_status = 'completed'
+                       AND EXISTS (SELECT 1 FROM chapters c WHERE c.novel_id = novels.id)
+                       AND NOT EXISTS (SELECT 1 FROM chapters c WHERE c.novel_id = novels.id AND c.fetched_at IS NULL))`, now()),
         /** Your choice: from now on the site's status never overrides it. */
         setSeriesStatus: (id, status) =>
             run("UPDATE novels SET series_status = ?, series_status_manual = 1 WHERE id = ?", status, id),
@@ -118,9 +122,10 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
                 html, cleanVersion, now(), id),
         failChapter: (id, error, retryAt) =>
             run("UPDATE chapters SET error = ?, attempts = attempts + 1, retry_at = ? WHERE id = ?", error, retryAt, id),
-        /** Chapter list page without html (novels can have thousands of chapters). Reading order, like the reader. */
-        chapterPage: (novelId, limit, offset) =>
-            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ? ORDER BY idx, id LIMIT ? OFFSET ?`,
+        /** Chapter list page without html (novels can have thousands of chapters). Reading order, or newest first. */
+        chapterPage: (novelId, limit, offset, desc = false) =>
+            all(`SELECT ${CHAPTER_COLS} FROM chapters WHERE novel_id = ?
+                 ORDER BY ${desc ? "idx DESC, id DESC" : "idx, id"} LIMIT ? OFFSET ?`,
                 novelId, limit, offset),
         chapterCount: novelId => one("SELECT COUNT(*) AS n FROM chapters WHERE novel_id = ?", novelId).n,
         failingChapters: novelId =>

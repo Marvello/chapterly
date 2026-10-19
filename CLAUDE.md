@@ -49,7 +49,7 @@ SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapte
   the SW cache. That DB is per device, not per user: sign-out (`components/SignOutButton.tsx`) deletes it first.
   Connections close on `versionchange`; a blocked upgrade rejects with `IdbBlockedError` (shown as a notice).
   `client.ts runSync`: one sync at a time; calls during a run share one follow-up run (full if any wanted full). Logic is pure and tested: `progress.ts` (forward-only rules; "behind" = an earlier chapter),
-  `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads; re-fetches a TOC only when `chapters_fetched` changed; in-memory
+  `plan.ts` (what to keep offline), `scroll.ts`, `sync.ts` (outbox flush + downloads; re-fetches a TOC when its length ≠ `chapters_fetched`; ReadingView/NovelView apply the same check, else a chapter missing from a stale TOC renders blank; in-memory
   store tests), `label.ts` (chapter label: title, else `Chapter idx+1` — idx is 0-based),
   `settings.ts` (useSyncExternalStore store; server renders defaults).
 - API: `app/api/reader/*` are thin wrappers over `lib/reader/api.ts`. Signed-out `/api/*` gets 401 JSON
@@ -62,8 +62,9 @@ SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapte
 - Look: warm paper/charcoal tokens + amber accent in `globals.css` (all text pairs ≥4.5:1 — re-check if you change
   them), Literata as `font-serif` (`layout.tsx` → `--font-literata`). Reader settings add font, width and a
   "system" theme that is pure CSS (uses the page tokens). Library: `ContinueShelf`, `Cover` (hashed-hue placeholder),
-  posters default on phones (`viewPref.ts`), add form behind "+", "Check all" (`checkAllAction` → `requestCheckAll`, active novels only). Novel view opens scrolled to the current chapter, so its
-  "Library" back bar is sticky; its header links to the online-only manage page `/novels/[id]`; both list chapters in reading order (`idx, id`).
+  posters default on phones (`viewPref.ts`), add form behind "+", "Check all" (`checkAllAction` → `requestCheckAll`: active novels, minus completed + fully fetched like `isDue`). Novel view opens scrolled to the current chapter, so its
+  "Library" back bar is sticky; its header links to the online-only manage page `/novels/[id]`; both list chapters by (`idx, id`), newest first by
+  default (`OrderToggle`; per-device cookie `chapterly-chapter-order` so the server-rendered manage page reads it too).
 - Per-novel `novels.epub_enabled` gates the EPUB build and the Audiobookshelf rescan.
 - Browser-automation testing: the automation tab is hidden, so IntersectionObserver/timers only run while it
   renders — drive it with real scroll input + screenshots.

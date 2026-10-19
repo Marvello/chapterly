@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, BookOpenText, Check, Clock, ExternalLink, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
@@ -8,13 +9,14 @@ import DeleteButton from "@/components/DeleteButton";
 import EpubToggle from "@/components/EpubToggle";
 import Header from "@/components/Header";
 import IntervalSelect from "@/components/IntervalSelect";
+import OrderToggle from "@/components/OrderToggle";
 import SeriesStatusSelect from "@/components/SeriesStatusSelect";
 import StatusBadge from "@/components/StatusBadge";
 import { currentUserId } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { chapterLabel } from "@/lib/reader/label";
 import { parseId } from "@/lib/validate";
-import { displayTitle, isChecking, isSeriesDone, nextCheckAt, nextCheckLabel, novelStatus, relativeTime, workerDown } from "@/lib/view";
+import { CHAPTER_ORDER_COOKIE, chapterOrder, displayTitle, isChecking, isSeriesDone, nextCheckAt, nextCheckLabel, novelStatus, pageOf, relativeTime, workerDown } from "@/lib/view";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
@@ -32,9 +34,10 @@ export default async function NovelPage({ params, searchParams }:
   const total = db.chapterCount(n.id);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   // ponytail: idx ≈ position (TOC order), so the progress page can be off by one for TOCs with gaps; exact needs a COUNT query.
-  const progressPage = reading?.progress_idx != null ? Math.floor(reading.progress_idx / PAGE_SIZE) + 1 : 1;
+  const order = chapterOrder((await cookies()).get(CHAPTER_ORDER_COOKIE)?.value);
+  const progressPage = reading?.progress_idx != null ? pageOf(reading.progress_idx, total, PAGE_SIZE, order) : 1;
   const page = Math.min(pages, parseId((await searchParams).page ?? "") ?? progressPage);
-  const chapters = db.chapterPage(n.id, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  const chapters = db.chapterPage(n.id, PAGE_SIZE, (page - 1) * PAGE_SIZE, order === "desc");
   const failing = db.failingChapters(n.id);
   const maxAttempts = Number(process.env.CHAPTERLY_MAX_ATTEMPTS || 5);
   const status = novelStatus(n);
@@ -122,7 +125,10 @@ export default async function NovelPage({ params, searchParams }:
       )}
 
       <section>
-        <h2 className="mb-2 font-medium text-tprimary">Chapters <span className="text-tmuted">({total})</span></h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="font-medium text-tprimary">Chapters <span className="text-tmuted">({total})</span></h2>
+          <OrderToggle refresh />
+        </div>
         <ul className="divide-y divide-edge rounded-xl border border-edge bg-component">
           {chapters.map(c => (
             <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm" aria-current={c.id === reading?.progress_chapter_id || undefined}>
@@ -138,9 +144,9 @@ export default async function NovelPage({ params, searchParams }:
         </ul>
         {pages > 1 && (
           <nav className="mt-3 flex items-center justify-between text-sm">
-            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent hover:underline">← Earlier</Link> : <span />}
+            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent hover:underline">← {order === "desc" ? "Newer" : "Earlier"}</Link> : <span />}
             <span className="text-tmuted">Page {page} of {pages}</span>
-            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent hover:underline">Later →</Link> : <span />}
+            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent hover:underline">{order === "desc" ? "Older" : "Later"} →</Link> : <span />}
           </nav>
         )}
       </section>

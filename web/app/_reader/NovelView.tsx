@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import Link from "next/link";
 import { ArrowLeft, Download, Settings2 } from "lucide-react";
 import Cover from "@/components/Cover";
+import OrderToggle from "@/components/OrderToggle";
 import type { LibraryNovel, TocEntry } from "@/lib/db";
 import { go, runSync } from "@/lib/reader/client";
 import { httpApi } from "@/lib/reader/httpApi";
 import { idbStore } from "@/lib/reader/idb";
 import { chapterLabel } from "@/lib/reader/label";
 import { online } from "@/lib/reader/online";
+import { orderPref } from "@/lib/reader/orderPref";
 import { chapterState, savedFromLibrary, savedProgress } from "@/lib/reader/progress";
 import type { Position } from "@/lib/reader/types";
 import { displayTitle } from "@/lib/view";
@@ -21,7 +23,7 @@ async function readState(novelId: number): Promise<State> {
   // The API returns full library rows; the store is typed with the reader's subset of them (as in LibraryView).
   const novel = ((await store.getLibrary()) as LibraryNovel[] | undefined)?.find(n => n.id === novelId);
   let toc = await store.getToc(novelId);
-  if (!toc && navigator.onLine) {
+  if ((!toc || (novel && toc.length !== novel.chapters_fetched)) && navigator.onLine) {
     try { toc = await httpApi.toc(novelId); await store.setToc(novelId, toc); } catch { /* shown as "connect once" */ }
   }
   const saved = savedProgress(novel ? savedFromLibrary(novel) : null, (await store.getOutbox(novelId)) ?? null);
@@ -32,6 +34,7 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
   const [state, setState] = useState<State | null>(null);
   const current = useRef<HTMLLIElement>(null);
   const isOnline = useSyncExternalStore(online.subscribe, online.get, online.getServer);
+  const order = useSyncExternalStore(orderPref.subscribe, orderPref.get, orderPref.getServer);
 
   const load = useCallback(async () => setState(await readState(novelId)), [novelId]);
 
@@ -86,12 +89,17 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
           </Link>
         )}
       </div>
-      {toc.length > 0 && <p className="mb-4 text-sm text-tmuted">{offline} of {toc.length} chapters offline</p>}
+      {toc.length > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <p className="text-sm text-tmuted">{offline} of {toc.length} chapters offline</p>
+          <OrderToggle />
+        </div>
+      )}
       {toc.length === 0
         ? <p className="mt-4 text-tmuted">This novel isn&apos;t on the phone yet. Connect once to load it.</p>
         : (
           <ol className="divide-y divide-edge rounded-xl border border-edge bg-component">
-            {toc.map(c => {
+            {(order === "desc" ? [...toc].reverse() : toc).map(c => {
               const s = chapterState(c, saved);
               return (
                 <li key={c.id} ref={c.id === saved?.chapterId ? current : undefined}

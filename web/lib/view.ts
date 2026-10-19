@@ -150,3 +150,12 @@ export function nextCheckAt(
   const retryAt = n.check_retry_at || n.next_retry_at;
   return retryAt && retryAt < scheduled ? retryAt : scheduled;
 }
+
+/** Chapter list order, one per device (cookie, so the server-rendered manage page sees it too). */
+export type ChapterOrder = "asc" | "desc";
+export const CHAPTER_ORDER_COOKIE = "chapterly-chapter-order";
+/** Newest first unless you picked oldest first. */
+export const chapterOrder = (v: unknown): ChapterOrder => (v === "asc" ? "asc" : "desc");
+/** 1-based page holding 0-based position `pos` of a `total`-long list shown in `order`. */
+export const pageOf = (pos: number, total: number, size: number, order: ChapterOrder) =>
+  Math.max(1, Math.floor((order === "desc" ? total - 1 - pos : pos) / size) + 1);

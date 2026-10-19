@@ -85,17 +85,24 @@ describe("syncOnce", () => {
     expect(s.library?.map(n => n.id)).toEqual([1]);
   });
 
-  it("reuses the cached toc while the fetched count is unchanged, still planning downloads", async () => {
+  it("reuses the cached toc while it matches the fetched count, still planning downloads", async () => {
     const { s, store } = memoryStore();
     s.library = [novel(1)];
     await store.setToc(1, TOC);
     const api = fakeApi();
     expect(await syncOnce(store, api)).toMatchObject({ downloaded: 3 });
     expect(api.toc).not.toHaveBeenCalled();
+  });
 
-    s.library = [novel(1, { chapters_fetched: 2 })];
+  it("refetches a toc shorter than the fetched count, even when the saved library already has the new count", async () => {
+    // An earlier sync saved the library, then failed before refreshing this toc.
+    const { s, store } = memoryStore();
+    s.library = [novel(1)];
+    await store.setToc(1, TOC.slice(0, 2));
+    const api = fakeApi();
     await syncOnce(store, api);
     expect(api.toc).toHaveBeenCalledTimes(1);
+    expect(await store.getToc(1)).toEqual(TOC);
   });
 
   it("stops and reports when storage is full", async () => {

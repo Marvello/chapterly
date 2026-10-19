@@ -62,8 +62,6 @@ export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flush
   const ids = new Set(lib.map(n => n.id));
   const prev = (await store.getLibrary()) ?? [];
   for (const n of prev) if (!ids.has(n.id)) await store.deleteNovel(n.id);
-  // The toc lists fetched chapters, so an unchanged count means the cached one is still current.
-  const fetchedBefore = new Map(prev.map(n => [n.id, n.chapters_fetched]));
   for (const id of await store.pins()) if (!ids.has(id)) await store.deleteNovel(id);
   await store.setLibrary(lib);
 
@@ -73,8 +71,11 @@ export async function syncOnce(store: ReaderStore, api: ReaderApi, opts: { flush
     for (const n of lib) {
       const progress = savedFromLibrary(n), pinned = pins.has(n.id);
       if (!progress && !pinned) continue;
-      let toc = fetchedBefore.get(n.id) === n.chapters_fetched ? await store.getToc(n.id) : undefined;
-      if (!toc) {
+      // The toc lists exactly the fetched chapters, so a cached one is current iff its length matches the count.
+      // (Not "count unchanged since the last sync": the library is saved first, so a sync that failed before
+      // refreshing a toc would leave it stale for good.)
+      let toc = await store.getToc(n.id);
+      if (toc?.length !== n.chapters_fetched) {
         toc = await api.toc(n.id);
         await store.setToc(n.id, toc);
       }

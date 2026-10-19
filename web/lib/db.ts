@@ -50,7 +50,7 @@ export interface Db {
   setStatus(id: number, status: "active" | "paused"): void;
   deleteNovel(id: number): void;
   resetChapterRetries(novelId: number): void;
-  chapterPage(novelId: number, limit: number, offset: number): ChapterRow[];
+  chapterPage(novelId: number, limit: number, offset: number, desc?: boolean): ChapterRow[];
   chapterCount(novelId: number): number;
   failingChapters(novelId: number): ChapterRow[];
   getUserByEmail(email: string): UserRow | undefined;
