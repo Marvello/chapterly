@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
+import { checkAllAction } from "@/app/actions";
 import AddNovelForm from "@/components/AddNovelForm";
 import ContinueShelf from "@/components/ContinueShelf";
 import Header from "@/components/Header";
@@ -54,6 +55,13 @@ export default function LibraryView({ rev, notice, resync }: { rev: number; noti
       <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 border-b border-edge bg-page px-4 pt-4">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1"><Header signOut={isOnline} /></div>
+          {isOnline && !!all?.length && (
+            <form action={async () => { await checkAllAction(); resync(); }}>
+              <button className="flex items-center gap-1 rounded-lg border border-edge px-2.5 py-1 text-sm text-tprimary" title="Check every active novel for new chapters now">
+                <RefreshCw className="size-4" /> <span className="sr-only sm:not-sr-only">Check all</span>
+              </button>
+            </form>
+          )}
           {isOnline && all?.length !== 0 && (
             <button ref={addButton} type="button" onClick={() => setAdding(a => !a)} aria-expanded={showAdd} aria-controls="add-novel"
               className="flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-sm font-medium text-page">

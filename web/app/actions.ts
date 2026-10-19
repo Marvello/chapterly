@@ -36,6 +36,12 @@ export async function checkNowAction(form: FormData) {
   await withNovel(form, id => getDb().requestCheck(id));
 }
 
+export async function checkAllAction() {
+  await requireUser();
+  getDb().requestCheckAll();
+  revalidatePath("/");
+}
+
 export async function retryAction(form: FormData) {
   await withNovel(form, id => {
     getDb().resetChapterRetries(id);

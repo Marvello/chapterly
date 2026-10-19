@@ -135,6 +135,15 @@ const fresh = name => path.join(tmp, name);
     assert.deepStrictEqual(ir.interruptedChecks().map(r => r.id), [cut], `not finished/paused/never checked (#${fresh1})`);
     ir.close();
 
+    // ---- "check all" queues every active novel, skips paused ----
+    const ca = openDb(fresh("checkall.db"));
+    const on = ca.addNovel("https://example.com/novel/on").id;
+    const off = ca.addNovel("https://example.com/novel/off").id;
+    ca.setStatus(off, "paused");
+    ca.requestCheckAll();
+    assert.deepStrictEqual(ca.listNovels().filter(r => r.check_requested_at).map(r => r.id), [on], `paused #${off} skipped`);
+    ca.close();
+
     // ---- supported sites (hostnames with a dedicated WebToEpub parser) ----
     const sdb = openDb(fresh("sites.db"));
     assert.strictEqual(sdb.isSupportedHost("freewebnovel.com"), null, "unknown until the worker fills the list");

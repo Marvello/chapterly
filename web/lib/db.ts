@@ -44,6 +44,7 @@ export interface Db {
   getNovel(id: number): NovelRow | undefined;
   listNovels(newSince?: string, novelId?: number): LibraryRow[];
   requestCheck(id: number): void;
+  requestCheckAll(): void;
   setCheckInterval(id: number, minutes: number): void;
   setSeriesStatus(id: number, status: "ongoing" | "completed" | "dropped"): void;
   setStatus(id: number, status: "active" | "paused"): void;

@@ -53,6 +53,8 @@ function openDb(file = process.env.CHAPTERLY_DB || path.join(__dirname, "..", "d
         interruptedChecks: () => all(`SELECT * FROM novels WHERE status = 'active' AND last_checked_at IS NOT NULL
               AND last_checked_at > COALESCE(check_finished_at, '') ORDER BY id`),
         requestCheck: id => run("UPDATE novels SET check_requested_at = ? WHERE id = ?", now(), id),
+        /** "Check now" for every active novel (paused ones would never consume it). */
+        requestCheckAll: () => run("UPDATE novels SET check_requested_at = ? WHERE status = 'active'", now()),
         /** Your choice: from now on the site's status never overrides it. */
         setSeriesStatus: (id, status) =>
             run("UPDATE novels SET series_status = ?, series_status_manual = 1 WHERE id = ?", status, id),
