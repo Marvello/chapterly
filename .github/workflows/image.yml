@@ -1,8 +1,11 @@
 name: image
 
-# Tests every push / PR. Pushes to main (and v* tags) then build multi-arch images for the k3s cluster
-# (arm64) and x86 hosts, published to ghcr.io/<owner>/chapterly-worker and ghcr.io/<owner>/chapterly-web.
+# Tests every push / PR. Pushes to main (and v* tags) also build images for the k3s cluster (arm64) and x86
+# hosts, published to ghcr.io/<owner>/chapterly-worker and ghcr.io/<owner>/chapterly-web.
 # Both Dockerfiles build from the repo root (they need shared/).
+# Each platform builds on its own native runner (no QEMU: arm64 `next build` was ~220 s emulated vs ~25 s
+# native) in parallel with the tests, pushed untagged by digest; `merge` tags the multi-arch image
+# (latest + sha-…) only once the tests and every build passed.
 
 on:
   push:
@@ -23,19 +26,24 @@ jobs:
       - run: worker/setup.sh && npm --prefix web ci
       - run: npm test
 
-  image:
+  build:
     # Only publish on pushes to main / tags — never on PRs from forks.
     if: github.event_name != 'pull_request'
-    needs: test
-    runs-on: ubuntu-26.04
+    runs-on: ${{ matrix.platform.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
       matrix:
         app: [worker, web]
+        platform:
+          - { arch: amd64, runner: ubuntu-26.04 }
+          - { arch: arm64, runner: ubuntu-26.04-arm }
     steps:
       - uses: actions/checkout@v7
+
+      - name: Image name (ghcr needs a lowercase owner)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chapterly-${{ matrix.app }}" >> "$GITHUB_ENV"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -44,30 +52,82 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive image metadata
+      - name: Derive image labels
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/chapterly-${{ matrix.app }}
+          images: ${{ env.IMAGE }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.app }}/Dockerfile
+          platforms: linux/${{ matrix.platform.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.app }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}-${{ matrix.platform.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.app }}-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [test, build]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [worker, web]
+    steps:
+      - name: Image name (ghcr needs a lowercase owner)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chapterly-${{ matrix.app }}" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.app }}-*
+          merge-multiple: true
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=semver,pattern={{version}}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ${{ matrix.app }}/Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.app }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+      - name: Create the multi-arch image under its tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "$IMAGE@sha256:%s " *)
+          docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"

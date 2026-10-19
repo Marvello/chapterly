@@ -30,7 +30,8 @@ README.md has the full setup, env vars and CLI.
 ## Deploy
 Runs on the turing k3s cluster (homeserver) from the CI-built ghcr images; worker + web share one pod and one
 SQLite volume. Deploy/update steps: `../common-tech/memory/homeserver/app-chapterly.md`.
-- CI (`.github/workflows/image.yml`) tags each image `latest` + `sha-<short commit>`. The cluster runs `:latest`
+- CI (`.github/workflows/image.yml`): each arch builds on a native runner (`ubuntu-26.04` / `ubuntu-26.04-arm`, no
+  QEMU) in parallel with the tests, pushed by digest; `merge` then tags `latest` + `sha-<short commit>` only if all passed. The cluster runs `:latest`
   and updates by `rollout restart`; to roll back, point the deployment at a known-good `:sha-…` tag.
 - WebToEpub is pinned ONCE, `ARG WEBTOEPUB_REF` in `worker/Dockerfile`; `worker/setup.sh` (CI + local) reads
   it, so tests run against what ships. Bump it there, re-run `worker/setup.sh`, test, commit.
