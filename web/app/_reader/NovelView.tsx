@@ -81,7 +81,7 @@ export default function NovelView({ novelId, rev }: { novelId: number; rev: numb
         </button>
         {/* Check now, pause, interval, EPUB, delete: server-rendered, so online only. */}
         {isOnline && (
-          <Link href={`/novels/${novelId}`} className="flex items-center gap-1 rounded-lg border border-edge px-3 py-2 text-sm text-tprimary">
+          <Link href={`/novels/${novelId}`} className="flex items-center gap-1 rounded-lg border border-edge px-3 py-2 text-sm text-tprimary hover:border-accent">
             <Settings2 className="size-4" /> Manage
           </Link>
         )}

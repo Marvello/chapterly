@@ -26,6 +26,12 @@
 body { background: var(--page); color: var(--tsecondary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+/* Tailwind v4's preflight gives buttons `cursor: default`; every control gets a pointer and a hover tint
+   (translucent grey, so it shows on any button style and reader theme). :where() = zero specificity,
+   so a component's own hover: classes still win. */
+:where(button, select, summary, [role="button"]):not(:disabled) { cursor: pointer; }
+:where(button, select):disabled { cursor: not-allowed; }
+:where(button, select):not(:disabled):hover { background-image: linear-gradient(rgb(128 128 128 / 0.15) 0 0); }
 
 /* Reader: chapter HTML from novel sites (sanitized server-side by clean(), which also drops images).
    Tailwind's preflight removes margins; give prose its spacing back. */

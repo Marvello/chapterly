@@ -67,7 +67,7 @@ export default async function NovelPage({ params, searchParams }:
           </div>
           {n.author && <p className="text-tmuted">{n.author}</p>}
           <p className="text-sm text-tmuted">{n.parser ?? "parser pending"} ·{" "}
-            <a href={n.toc_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent">
+            <a href={n.toc_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
               source <ExternalLink className="size-3" />
             </a>
           </p>
@@ -80,7 +80,7 @@ export default async function NovelPage({ params, searchParams }:
       </section>
 
       <section className="mb-6 flex flex-wrap items-center gap-2">
-        <Link href={`/?novel=${n.id}`} className={btn}>
+        <Link href={`/?novel=${n.id}`} className={`${btn} hover:border-accent`}>
           <BookOpenText className="size-4" /> Read{unread ? ` · ${unread} unread` : ""}
         </Link>
         {n.status === "active" && (
@@ -138,9 +138,9 @@ export default async function NovelPage({ params, searchParams }:
         </ul>
         {pages > 1 && (
           <nav className="mt-3 flex items-center justify-between text-sm">
-            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent">← Earlier</Link> : <span />}
+            {page > 1 ? <Link href={`?page=${page - 1}`} className="text-accent hover:underline">← Earlier</Link> : <span />}
             <span className="text-tmuted">Page {page} of {pages}</span>
-            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent">Later →</Link> : <span />}
+            {page < pages ? <Link href={`?page=${page + 1}`} className="text-accent hover:underline">Later →</Link> : <span />}
           </nav>
         )}
       </section>
