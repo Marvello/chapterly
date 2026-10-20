@@ -6,6 +6,8 @@ worker checks it daily and fetches only new chapters, and the EPUB is regenerate
 [WebToEpub](https://github.com/dteviot/WebToEpub)'s 640+ site parsers, run headless in Node (jsdom),
 instead of writing our own.
 
+**Project page:** [marvello.xyz/chapterly](https://marvello.xyz/chapterly)
+
 ## Layout
     shared/     db.js (the only module with SQL) + migrations/ — used by both worker and web
     worker/     scraper + scheduler + CLI (cli.js, src/, test/, vendor-WebToEpub/)
